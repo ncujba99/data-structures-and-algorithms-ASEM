@@ -2,37 +2,9 @@
 
 Solutions to two assignments from the *Data Structures and Algorithms* course. Each task has three parts:
 
-- **documentation** that starts with the math (definitions, formulas, proofs) and then explains the algorithm;
-- **two implementations**, Python and C++, that use the same algorithm and print identical output;
-- **an interactive visualizer**: an HTML page that animates the algorithm step by step and highlights the line of code being executed.
-
-```
-              ╔════════════════════════════════╗
-              ║ structuri de date si algorime/ ║
-              ╚════════════════╤═══════════════╝
-        ┌──────────────────────┼────────────────────────┐
-        ▼                      ▼                        ▼
-┌───────────────┐   ┌─────────────────────┐   ╭──────────────────╮
-│    set_N1/    │   │        lab5/        │   │   visualizer/    │
-│ combinatorics │   │ binary tree (Lab 5) │   │ 7 animated pages │
-│   Romanian    │   │       Russian       │   │ open index.html  │
-└───────────────┘   └─────────────────────┘   ╰──────────────────╯
-```
-
-Every task follows the same path:
-
-```
-┌──────────────────┐   ┌────────────────────┐   ╔══════════════════╗
-│  docs/<task>.md  │──►│  python/<task>.py  │──►║ identical output ║
-│ math → algorithm │   │   cpp/<task>.cpp   │   ║ (checked: diff)  ║
-└──────────────────┘   └──────────┬─────────┘   ╚══════════════════╝
-                                  │
-                                  ▼
-                      ╭────────────────────────╮
-                      │ visualizer/<task>.html │
-                      │ step-by-step animation │
-                      ╰────────────────────────╯
-```
+- **documentation** (`docs/<task>.md`) that starts with the math (definitions, formulas, proofs) and then explains the algorithm;
+- **two implementations** (`python/<task>.py`, `cpp/<task>.cpp`) that use the same algorithm and print identical output;
+- **an interactive visualizer** (`visualizer/<task>.html`): an HTML page that animates the algorithm step by step and highlights the line of code being executed.
 
 ---
 
@@ -61,10 +33,6 @@ Theory, class interface and answers to the control questions: [lab5/README.md](l
 
 Shared code for Lab 5: [`binary_tree.h`](lab5/cpp/binary_tree.h) / [`binary_tree.py`](lab5/python/binary_tree.py) (`Node`, `BinaryTree` and the generic tree functions) and [`console.h`](lab5/cpp/console.h) / [`console.py`](lab5/python/console.py) (input with error checking).
 
-### Bonus: Задание 1 as a real web app
-
-[lab5_web/](lab5_web/README.md) solves the same train-station task the way it is done at work: React frontend, FastAPI backend and PostgreSQL in Docker Compose, with Alembic migrations. The data is relational (countries → cities → trains → stops), which shows what a database adds over the hand-written tree: integrity rules, transactions, joins and reports. It also shows where the tree went: PostgreSQL keeps every key and index as a B+-tree, and the app lists them with their query plans. Run it with `cd lab5_web && docker compose up --build`.
-
 ---
 
 ## Running
@@ -83,29 +51,36 @@ cd set_N1/cpp && g++ -std=c++17 -O2 -Wall -o problema1 problema1.cpp && ./proble
 cd lab5/cpp   && g++ -std=c++17 -O2 -Wall -o zadanie1 zadanie1_poezda.cpp && ./zadanie1
 ```
 
-On Windows with Visual Studio, add `/utf-8` (the sources are UTF-8): `cl /std:c++17 /EHsc /utf-8 zadanie1_poezda.cpp`. The full command list for each task is in [set_N1/README.md](set_N1/README.md#compilare-și-rulare) and [lab5/README.md](lab5/README.md#3-компиляция-и-запуск).
+---
+
+## Bonus
+
+| Project | What it is | Needs |
+|---|---|---|
+| [visualizer/](visualizer/index.html) | one animated page per task, with a live Python / C++ code tracer | a browser |
+| [lab5_web/](lab5_web/README.md) | Задание 1 as a real web app: React, FastAPI, PostgreSQL | Docker or Podman |
 
 ### Visualizers
 
-Open [`visualizer/index.html`](visualizer/index.html) in any browser. It works offline, straight from the file, with nothing to install.
-
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│ ← back   Title of the task                    [ Visualization ] [ Theory ] │
-├────────────────────────────────────────────────────────────────────────────┤
-│ task inputs …                speed ──o──    Reset   |<   ► Play   >|       │
-├────────────────────────────────────────────┬───────────────────────────────┤
-│ animation (tree / board / arrays)          │ live code tracer              │
-│                                            │   Python | C++                │
-│                                            │ ▌ current line highlighted    │
-│ message for the current step               │ current variables             │
-│ step slider ─────────o──────────           │                               │
-├────────────────────────────────────────────┤                               │
-│ execution log                              │                               │
-└────────────────────────────────────────────┴───────────────────────────────┘
+```sh
+open visualizer/index.html        # or double-click it: works offline, nothing to install
 ```
 
-Keys: `Space` play / pause, `←` / `→` one step. The page-level code lives in each HTML file; the shared player, style and tree drawing are in [`visualizer/assets/`](visualizer/assets/).
+- Each page animates the algorithm step by step and highlights the line of Python or C++ being executed.
+- Keys: `Space` play / pause, `←` / `→` one step.
+- The page-level code lives in each HTML file; the shared player, style and tree drawing are in [`visualizer/assets/`](visualizer/assets/).
+
+### Задание 1 as a real web app
+
+```sh
+cd lab5_web && docker compose up --build        # app: http://localhost:5173, API docs: http://localhost:8000/docs
+```
+
+The same train-station task, built the way it is done at work:
+
+- **Stack:** React frontend; FastAPI backend with SQLAlchemy models and Pydantic schemas; PostgreSQL; migrations generated by Alembic from the models; all in Docker Compose.
+- **What a database adds over the hand-written tree:** relational data (countries → cities → trains → stops), integrity rules, transactions, joins and reports.
+- **Where the tree went:** PostgreSQL keeps every key and index as a B+-tree; the app lists them with their query plans.
 
 ---
 
