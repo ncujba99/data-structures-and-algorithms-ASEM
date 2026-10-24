@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Дерево решений: кредит</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .qcard { border: 1px solid var(--line-2); background: var(--panel-2); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;
+           display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 18px; align-items: center; }
+  @media (max-width: 640px) { .qcard { grid-template-columns: minmax(0, 1fr); } }
+  .qcard .k { font: 700 11px var(--mono); color: var(--accent-2); letter-spacing: .06em; text-transform: uppercase; }
+  .qcard .q { font-size: 17px; font-weight: 600; margin-top: 4px; }
+  .qcard.ok { border-color: var(--green); background: var(--green-soft); }
+  .qcard.bad { border-color: var(--red); background: var(--red-soft); }
+  .qcard.part { border-color: var(--yellow); background: var(--yellow-soft); }
+  .yn { display: flex; gap: 8px; }
+  .yn .btn { padding: 10px 22px; font-size: 15px; }
+  .answers { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
+  .answers li { display: flex; gap: 10px; color: #c8ccda; }
+  .answers b { font: 700 12px var(--mono); width: 40px; flex: none; }
+  .answers b.y { color: var(--green); }
+  .answers b.n { color: var(--red); }
+  .lok circle { stroke: rgba(34,197,94,.6); }
+  .lno circle { stroke: rgba(240,82,101,.6); }
+  .lpart circle { stroke: rgba(245,184,61,.7); }
+  .tree-box { overflow-x: auto; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<template id="params">
+  <button class="btn small green" id="restart" type="button">Начать опрос заново</button>
+  <button class="btn small" id="random" type="button">🎲 Случайные ответы</button>
+  <button class="btn small" id="countBtn" type="button">Подсчитать решения (обход дерева)</button>
+  <span class="hint">Отвечайте кнопками ДА / НЕТ в области визуализации или клавишами <kbd>Y</kbd> / <kbd>N</kbd>.</span>
+</template>
+
+<template id="theory">
+  <section class="card span">
+    <h3>Задание 2: дерево решений «Выдача потребительского кредита»</h3>
+    <p>Внутренний узел — <b>вопрос</b>, левый ребёнок — ответ <b>ДА</b>, правый — <b>НЕТ</b>, лист — <b>решение</b>. Программа ведёт диалог, спускаясь от корня, и выводит решение вместе со всеми ответами (требования методички: не менее 4 уровней, диалог, вывод решения и ответов).</p>
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Уровней</div><div class="v">6</div></div>
+      <div class="stat"><div class="label">Вопросов (I)</div><div class="v">9</div></div>
+      <div class="stat"><div class="label">Решений (L)</div><div class="v">10</div></div>
+      <div class="stat"><div class="label">Вопросов за опрос</div><div class="v">2 … 5</div></div>
+    </div>
+  </section>
+  <section class="card">
+    <h3>Полное бинарное дерево</h3>
+    <p>У каждого вопроса ровно два ответа, поэтому у каждого узла 0 или 2 ребёнка. Для такого дерева:</p>
+    <div class="formula">L = I + 1 &nbsp;&nbsp;(10 = 9 + 1)</div>
+    <p>Доказательство: рёбер n − 1 = L + I − 1, и каждый вопрос даёт ровно 2 ребра: 2I = L + I − 1.</p>
+  </section>
+  <section class="card">
+    <h3>Неравенство Крафта</h3>
+    <p>Если лист i лежит на глубине d<sub>i</sub> (число вопросов до решения), то для полного бинарного дерева</p>
+    <div class="formula">Σ 2<sup>−d<sub>i</sub></sup> = 1</div>
+    <p>Здесь глубины 3, 4, 5, 5, 4, 4, 3, 3, 3, 2: 1/8+1/16+1/32+1/32+1/16+1/16+1/8+1/8+1/8+1/4 = 1 ✓</p>
+  </section>
+  <section class="card">
+    <h3>Сложность</h3>
+    <p>Опрос — один путь от корня до листа: <b>O(h)</b> вопросов, h ≤ 5. Подсчёт решений, число узлов и высота — полные обходы, <b>O(n)</b>.</p>
+    <p>Кнопка «Подсчитать решения» анимирует рекурсию <code>count_decisions</code>: значение узла = сумма значений детей, лист = 1.</p>
+  </section>
+</template>
+
+<script src="../assets/viz.js"></script>
+<script>
+const CODE = {
+  consult: {
+    title: { py: 'zadanie2_derevo_reshenii.py — consult(root)', cpp: 'zadanie2_derevo_reshenii.cpp — consult(root)' },
+    py: `
+def consult(root):
+    print("Ответьте на вопросы: «да» или «нет».\\n")             #@start
+    answers = []                                                 #@start
+    node = root                                                  #@start
+    while not node.is_leaf():                                    #@loop
+        yes = read_yes_no(f"{len(answers) + 1}. {node.info.text} ")   #@ask
+        answers.append((node.info.text, yes))                    #@append
+        node = node.left if yes else node.right                  #@move
+
+    print("\\n==================== РЕЗУЛЬТАТ ====================")   #@result
+    print(node.info.text)                                        #@result
+    print("\\nВаши ответы:")                                      #@report
+    for i, (text, yes) in enumerate(answers, 1):                 #@report
+        print(f"  {i}. {text} - {'ДА' if yes else 'НЕТ'}")       #@report`,
+    cpp: `
+void consult(const DNode* root) {
+    std::cout << "Ответьте на вопросы: «да» или «нет».\\n\\n";     //@start
+    std::vector<std::pair<std::string, bool>> answers;           //@start
+    const DNode* node = root;                                    //@start
+    while (!node->isLeaf()) {                                    //@loop
+        bool yes = readYesNo(std::to_string(answers.size() + 1) + ". " + node->info.text + " ");   //@ask
+        answers.push_back({node->info.text, yes});               //@append
+        node = yes ? node->left : node->right;                   //@move
+    }
+
+    std::cout << "\\n==================== РЕЗУЛЬТАТ ====================\\n"   //@result
+              << node->info.text << "\\n"                          //@result
+              << "\\nВаши ответы:\\n";                              //@report
+    for (size_t i = 0; i < answers.size(); ++i)                  //@report
+        std::cout << "  " << i + 1 << ". " << answers[i].first << " - "   //@report
+                  << (answers[i].second ? "ДА" : "НЕТ") << "\\n";  //@report
+}`,
+  },
+  count: {
+    title: { py: 'zadanie2_derevo_reshenii.py — count_decisions(tree)', cpp: 'zadanie2_derevo_reshenii.cpp — countDecisions(tree)' },
+    py: `
+def count_decisions(tree):
+    if tree is None:                    #@null
+        return 0                        #@null
+    if tree.is_leaf():                  #@leaf
+        return 1                        #@leaf
+    return count_decisions(tree.left) + count_decisions(tree.right)   #@sum`,
+    cpp: `
+int countDecisions(const DNode* tree) {
+    if (tree == nullptr) return 0;                  //@null
+    if (tree->isLeaf()) return 1;                   //@leaf
+    return countDecisions(tree->left) + countDecisions(tree->right);   //@sum
+}`,
+  },
+};
+
+const Q = (text, yes, no) => ({ q: true, text, left: yes, right: no });
+const D = text => ({ q: false, text, left: null, right: null });
+const ROOT = Q('Есть ли у вас постоянный официальный доход?',
+  Q('Ваш ежемесячный доход больше 10 000 леев?',
+    Q('Есть ли у вас сейчас просроченные кредиты?',
+      D('ОТКАЗ: сначала погасите текущую просроченную задолженность.'),
+      Q('Запрашиваемая сумма меньше 12 ваших месячных доходов?',
+        D('ОДОБРЕНО: кредит на стандартных условиях.'),
+        Q('Можете ли вы предоставить залог (недвижимость или автомобиль)?',
+          D('ОДОБРЕНО: кредит под залог, сниженная процентная ставка.'),
+          D('ОДОБРЕНО ЧАСТИЧНО: сумма уменьшена до 12 месячных доходов.')))),
+    Q('Есть ли у вас поручитель с официальным доходом?',
+      Q('Были ли все ваши прошлые кредиты погашены вовремя?',
+        D('ОДОБРЕНО: кредит с поручителем.'),
+        D('ОТКАЗ: низкий доход и плохая кредитная история.')),
+      D('ОТКАЗ: недостаточный доход и нет поручителя.'))),
+  Q('Есть ли у вас другой стабильный доход (пенсия, аренда, бизнес)?',
+    Q('Можете ли вы подтвердить этот доход документами?',
+      D('ОДОБРЕНО: кредит на ограниченную сумму (до 50 000 леев).'),
+      D('ОТКАЗ: доход не подтверждён документами.')),
+    D('ОТКАЗ: нет источника дохода для погашения кредита.')));
+
+// Номера в прямом порядке: В1..В9 для вопросов, Р1..Р10 для решений.
+let qn = 0, dn = 0, idn = 0;
+(function number(n) { if (!n) return; n.id = idn++; n.tag = n.q ? 'В' + ++qn : 'Р' + ++dn; number(n.left); number(n.right); })(ROOT);
+const kindOf = n => (n.text.startsWith('ОДОБРЕНО ЧАСТИЧНО') ? 'part' : n.text.startsWith('ОДОБРЕНО') ? 'ok' : 'bad');
+const STATS = { 'Уровней': 6, 'Вопросов': 9, 'Решений': 10 };
+
+let answers = [];
+let VIZ = null;
+
+function consultSteps(ans) {
+  const steps = [];
+  let node = ROOT;
+  const path = [ROOT.id], given = [];
+  const push = (line, msg, o = {}) => steps.push({
+    code: 'consult', line, msg, kind: o.kind, pause: o.pause,
+    st: { mode: 'consult', node, path: path.slice(), answers: given.slice(), waiting: !!o.waiting },
+    vars: { 'len(answers)': given.length, node: node.tag, ...(o.vars || {}) },
+    stats: { ...STATS, 'Вопрос': node.q ? given.length + 1 : '—' },
+  });
+  push('start', 'Начало опроса: node = корень (В1).');
+  let k = 0;
+  while (node.q) {
+    push('loop', `${node.tag} — вопрос (не лист): продолжаем цикл.`);
+    if (k >= ans.length) {
+      push('ask', `Вопрос ${given.length + 1}: ${node.text} — ожидание ответа…`, { waiting: true, pause: true, kind: 'hit' });
+      return steps;
+    }
+    const yes = ans[k++];
+    push('ask', `Вопрос ${given.length + 1}: ${node.text} → ${yes ? 'ДА' : 'НЕТ'}`, { vars: { yes: yes ? 'True' : 'False' } });
+    given.push({ text: node.text, yes, tag: node.tag });
+    push('append', `answers.append(("${node.tag}", ${yes ? 'ДА' : 'НЕТ'}))`, { vars: { yes: yes ? 'True' : 'False' } });
+    const from = node.tag;
+    node = yes ? node.left : node.right;
+    path.push(node.id);
+    push('move', `${yes ? 'ДА → левый' : 'НЕТ → правый'} ребёнок: ${from} → ${node.tag}`, { vars: { yes: yes ? 'True' : 'False' } });
+  }
+  push('loop', `${node.tag} — лист: цикл завершён.`);
+  const kind = kindOf(node);
+  push('result', `РЕЗУЛЬТАТ: ${node.text}`, { kind: kind === 'part' ? 'hit' : kind });
+  push('report', `Выведены ответы: ${given.map((g, i) => `${i + 1}) ${g.yes ? 'ДА' : 'НЕТ'}`).join(', ')}. Опрос завершён за ${given.length} вопрос(а/ов).`, { kind: kind === 'part' ? 'hit' : kind });
+  return steps;
+}
+
+function countSteps() {
+  const steps = [];
+  const val = {}, done = {}, stack = [];
+  const push = (line, msg, cur, o = {}) => steps.push({
+    code: 'count', line, msg, kind: o.kind,
+    st: { mode: 'count', node: cur, path: stack.slice(), val: { ...val }, done: { ...done } },
+    vars: { tree: cur ? cur.tag : '—', ...(o.vars || {}) },
+    stats: STATS,
+  });
+  function rec(n) {
+    stack.push(n.id);
+    if (!n.q) {
+      val[n.id] = 1; done[n.id] = true;
+      push('leaf', `${n.tag} — лист (решение): возвращаем 1`, n, { kind: 'hit' });
+      stack.pop();
+      return 1;
+    }
+    push('sum', `${n.tag} — вопрос: считаем левое (ДА) и правое (НЕТ) поддеревья`, n);
+    const l = rec(n.left), r = rec(n.right);
+    val[n.id] = l + r; done[n.id] = true;
+    push('sum', `${n.tag}: ${l} + ${r} = ${l + r}`, n, { vars: { left: l, right: r } });
+    stack.pop();
+    return l + r;
+  }
+  const total = rec(ROOT);
+  push(null, `count_decisions(root) = ${total}. Вопросов: 19 − ${total} = ${19 - total}, уровней: 6. L = I + 1 ✓`, null, { kind: 'ok' });
+  return steps;
+}
+
+function render(step, view) {
+  const st = step.st;
+  if (!st) { view.innerHTML = ''; return; }
+  const onPath = new Set(st.path);
+  let card = '';
+  if (st.mode === 'count') {
+    card = `<div class="qcard"><div><div class="k">Обход дерева</div><div class="q">count_decisions: значение узла = число решений в его поддереве</div></div></div>`;
+  } else if (!st.node.q) {
+    const kind = kindOf(st.node);
+    card = `<div class="qcard ${kind}"><div><div class="k">Решение ${st.node.tag}</div><div class="q">${Viz.esc(st.node.text)}</div></div></div>`;
+  } else {
+    const can = st.waiting;
+    card = `<div class="qcard"><div><div class="k">Вопрос ${st.answers.length + 1} · узел ${st.node.tag}</div><div class="q">${Viz.esc(st.node.text)}</div></div>
+      <div class="yn"><button class="btn green" data-ans="1" ${can ? '' : 'disabled'}>ДА</button><button class="btn red" data-ans="0" ${can ? '' : 'disabled'}>НЕТ</button></div></div>`;
+  }
+  const svg = Viz.drawBinary([ROOT], {
+    colW: 50, rowH: 66, r: 17, rectW: 42, rectH: 28, extraBottom: 20,
+    shape: n => (n.q ? 'rect' : 'circle'),
+    label: n => n.tag,
+    sub: n => (n.q ? '' : { ok: 'одобр.', bad: 'отказ', part: 'частично' }[kindOf(n)]),
+    title: n => n.text,
+    badge: n => (st.mode === 'count' && st.val[n.id] !== undefined ? st.val[n.id] : ''),
+    cls: n => {
+      const base = n.q ? '' : { ok: 'lok', bad: 'lno', part: 'lpart' }[kindOf(n)];
+      if (n === st.node) return base + (n.q || st.mode === 'count' ? ' cur' : kindOf(n) === 'bad' ? ' bad' : ' ok');
+      if (st.mode === 'count') return base + (st.done[n.id] ? ' done' : onPath.has(n.id) ? ' path' : '');
+      return base + (onPath.has(n.id) ? ' path' : '');
+    },
+    edgeCls: (p, c) => (onPath.has(c.id) && onPath.has(p.id) ? 'on' : ''),
+    edgeLabel: (p, side) => (side === 'left' ? 'да' : 'нет'),
+  });
+  const list = st.mode === 'consult' && st.answers.length
+    ? `<div class="label section-label" style="margin:16px 0 6px">Ваши ответы</div><ol class="answers">${st.answers.map((a, i) => `<li><b class="${a.yes ? 'y' : 'n'}">${a.yes ? 'ДА' : 'НЕТ'}</b><span>${i + 1}. ${Viz.esc(a.text)}</span></li>`).join('')}</ol>` : '';
+  view.innerHTML = card + `<div class="tree-box">${svg}</div>` + list;
+}
+
+function answer(yes) {
+  const last = VIZ.steps[VIZ.steps.length - 1];
+  if (!last.st || last.st.mode !== 'consult' || !last.st.waiting) return;
+  const from = VIZ.steps.length;
+  answers.push(yes);
+  VIZ.load(consultSteps(answers), { start: from, autoplay: true });
+}
+
+VIZ = Viz.page({
+  lang: 'ru', logo: '?', badge: 'ЛР №5 · Задание 2',
+  title: 'Дерево решений: выдача потребительского кредита',
+  subtitle: 'Вопрос — внутренний узел, ДА — левое поддерево, НЕТ — правое, решение — лист. 6 уровней, 9 вопросов, 10 решений',
+  stageTitle: 'Диалог и путь по дереву',
+  legend: [['var(--yellow)', 'Текущий узел'], ['var(--accent-2)', 'Пройденный путь'], ['var(--green)', 'Одобрено'], ['var(--red)', 'Отказ'], ['var(--cyan)', 'Посчитано']],
+  code: CODE, speed: 450, autoplay: true,
+  generate: () => { answers = []; return consultSteps(answers); },
+  render,
+  init(viz) {
+    VIZ = viz;
+    viz.view.addEventListener('click', e => { const b = e.target.closest('[data-ans]'); if (b && !b.disabled) answer(b.dataset.ans === '1'); });
+    document.addEventListener('keydown', e => {
+      if (e.target.closest('input, select, textarea')) return;
+      if (e.key === 'y' || e.key === 'Y' || e.key === 'д' || e.key === 'Д') answer(true);
+      if (e.key === 'n' || e.key === 'N' || e.key === 'т' || e.key === 'Т') answer(false);
+    });
+    document.getElementById('restart').onclick = viz.reset;
+    document.getElementById('random').onclick = () => {
+      answers = [];
+      let n = ROOT;
+      while (n.q) { const y = Math.random() < 0.5; answers.push(y); n = y ? n.left : n.right; }
+      viz.load(consultSteps(answers), { autoplay: true });
+    };
+    document.getElementById('countBtn').onclick = () => viz.load(countSteps(), { autoplay: true });
+  },
+});
+</script>
+</body>
+</html>

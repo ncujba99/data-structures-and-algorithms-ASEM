@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Numărare P, C, A</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .res { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 760px) { .res { grid-template-columns: minmax(0, 1fr); } }
+  .rc { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; transition: border-color .2s, box-shadow .2s; }
+  .rc.active { border-color: var(--yellow); box-shadow: 0 0 0 3px var(--yellow-soft); }
+  .rc.done { border-color: rgba(34,197,94,.55); }
+  .rc .h { display: flex; justify-content: space-between; font: 700 13px var(--mono); }
+  .rc .h span:last-child { color: var(--muted); font-weight: 500; }
+  .rc .f { font: 13px var(--mono); color: var(--muted); margin-top: 6px; min-height: 20px; word-break: break-all; }
+  .rc .f b { color: var(--yellow); }
+  .rc .v { font: 700 22px var(--mono); margin-top: 4px; }
+  .rc.done .v { color: var(--green); }
+  .pascal { display: grid; gap: 4px; justify-items: center; }
+  .prow { display: flex; gap: 4px; align-items: center; }
+  .prow .rl { width: 34px; font: 11px var(--mono); color: var(--faint); text-align: right; margin-right: 6px; }
+  .pc { width: 40px; height: 26px; border-radius: 6px; display: grid; place-items: center; font: 600 11px var(--mono);
+        background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); transition: all .2s; }
+  .pc.on { background: var(--accent-soft); border-color: var(--accent-2); color: var(--text); }
+  .pc.cur { background: var(--yellow-soft); border-color: var(--yellow); color: var(--text); transform: scale(1.12); }
+  .pc.ok { background: var(--green-soft); border-color: var(--green); color: var(--text); }
+  .pc.alt { background: var(--purple-soft); border-color: var(--purple); color: var(--text); }
+  .bracket { font: 12px var(--mono); color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<template id="params">
+  <label class="field"><span class="label">n (1..12)</span><input type="number" id="n" min="1" max="12" value="6"></label>
+  <label class="field"><span class="label">m (0..n)</span><input type="number" id="m" min="0" max="12" value="3"></label>
+  <span class="hint">Programul acceptă n ≤ 20; aici n ≤ 12, ca triunghiul lui Pascal să încapă pe ecran.</span>
+</template>
+
+<template id="theory">
+  <section class="card span">
+    <h3>Ce calculăm</h3>
+    <p>Pentru o mulțime cu <b>n</b> elemente se cer trei numere: câte permutări, câte combinări de <b>m</b> și câte aranjamente de <b>m</b> există.</p>
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Permutări</div><div class="v">P(n) = n!</div></div>
+      <div class="stat"><div class="label">Aranjamente</div><div class="v">A(n,m) = n!/(n−m)!</div></div>
+      <div class="stat"><div class="label">Combinări</div><div class="v">C(n,m) = A(n,m)/m!</div></div>
+    </div>
+  </section>
+  <section class="card">
+    <h3>Permutări: P(n) = n!</h3>
+    <p>Pe primul loc avem n variante, pe al doilea n−1, …, pe ultimul 1 (regula produsului):</p>
+    <div class="formula">P(n) = n · (n−1) · … · 2 · 1 = n!</div>
+    <p>Programul înmulțește <code>result *= i</code> pentru i = 2…n, adică n−1 înmulțiri: <b>O(n)</b>.</p>
+  </section>
+  <section class="card">
+    <h3>Aranjamente: A(n, m)</h3>
+    <p>Umplem doar m locuri, ordinea contează:</p>
+    <div class="formula">A(n,m) = n · (n−1) · … · (n−m+1) = <span class="frac"><span>n!</span><span>(n−m)!</span></span></div>
+    <p>Programul nu calculează factoriale întregi: înmulțește doar ultimele m numere, <b>O(m)</b>.</p>
+  </section>
+  <section class="card">
+    <h3>Combinări: C(n, m)</h3>
+    <p>Ordinea nu contează: fiecare submulțime apare de m! ori printre aranjamente.</p>
+    <div class="formula">C(n,m) = <span class="frac"><span>A(n,m)</span><span>m!</span></span> = <span class="frac"><span>n!</span><span>m!(n−m)!</span></span></div>
+    <p>Iterativ: după pasul i rezultatul este <code>C(n−k+i, i)</code>, deci împărțirea la i e mereu exactă. Valorile intermediare sunt chiar celulele triunghiului lui Pascal (animația le arată).</p>
+  </section>
+  <section class="card">
+    <h3>Triunghiul lui Pascal</h3>
+    <div class="formula">C(n,m) = C(n−1,m−1) + C(n−1,m)</div>
+    <div class="formula">C(n,m) = C(n,n−m)</div>
+    <p>Din simetrie, programul folosește <code>k = min(m, n−m)</code>, ca bucla să fie cât mai scurtă.</p>
+  </section>
+  <section class="card">
+    <h3>Exemplu: n = 6, m = 3</h3>
+    <table class="t">
+      <tr><th>Mărime</th><th>Calcul</th><th>Valoare</th></tr>
+      <tr><td>P(6)</td><td>1·2·3·4·5·6</td><td>720</td></tr>
+      <tr><td>A(6,3)</td><td>4·5·6</td><td>120</td></tr>
+      <tr><td>C(6,3)</td><td>1→4→10→20</td><td>20</td></tr>
+      <tr><td>verificare</td><td>C·m! = 20·6</td><td>120 = A ✓</td></tr>
+    </table>
+  </section>
+</template>
+
+<script src="../assets/viz.js"></script>
+<script>
+const CODE = {
+  title: { py: 'problema1.py', cpp: 'problema1.cpp' },
+  py: `
+def permutari(n):
+    result = 1                                  #@p-init
+    for i in range(2, n + 1):                   #@p-loop
+        result *= i                             #@p-mul
+    return result                               #@p-ret
+
+
+def aranjamente(n, m):
+    result = 1                                  #@a-init
+    for i in range(n - m + 1, n + 1):           #@a-loop
+        result *= i                             #@a-mul
+    return result                               #@a-ret
+
+
+def combinari(n, m):
+    k = min(m, n - m)  # C(n, m) = C(n, n - m)  #@c-k
+    result = 1                                  #@c-init
+    for i in range(1, k + 1):                   #@c-loop
+        result = result * (n - k + i) // i      #@c-mul
+    return result                               #@c-ret`,
+  cpp: `
+u64 permutari(int n) {
+    u64 result = 1;                                 //@p-init
+    for (int i = 2; i <= n; ++i) result *= i;       //@p-loop,p-mul
+    return result;                                  //@p-ret
+}
+
+// A(n, m) = (n - m + 1) * ... * n
+u64 aranjamente(int n, int m) {
+    u64 result = 1;                                 //@a-init
+    for (int i = n - m + 1; i <= n; ++i) result *= i;   //@a-loop,a-mul
+    return result;                                  //@a-ret
+}
+
+// după pasul i rezultatul este C(n-k+i, i)
+u64 combinari(int n, int m) {
+    int k = (m < n - m) ? m : n - m;                //@c-k
+    u64 result = 1;                                 //@c-init
+    for (int i = 1; i <= k; ++i)                    //@c-loop
+        result = result * (n - k + i) / i;          //@c-mul
+    return result;                                  //@c-ret
+}`,
+};
+
+function binom(n, k) { let r = 1; for (let i = 1; i <= k; i++) r = r * (n - k + i) / i; return Math.round(r); }
+
+function generate() {
+  const n = Number(document.getElementById('n').value);
+  const m = Number(document.getElementById('m').value);
+  if (!Number.isInteger(n) || n < 1 || n > 12) throw new Error('n trebuie să fie un întreg din [1, 12].');
+  if (!Number.isInteger(m) || m < 0 || m > n) throw new Error(`m trebuie să fie un întreg din [0, ${n}].`);
+
+  const steps = [];
+  const st = { phase: '', n, m, cells: {}, pascal: {}, P: null, A: null, C: null, fP: '', fA: '', fC: '' };
+  const stats = () => ({ 'P(n)': st.P === null ? '—' : st.P, 'A(n,m)': st.A === null ? '—' : st.A, 'C(n,m)': st.C === null ? '—' : st.C });
+  const push = (line, msg, extra = {}) => steps.push({
+    line, msg, ...extra, stats: stats(),
+    st: { ...st, cells: { ...st.cells }, pascal: { ...st.pascal } },
+  });
+
+  push(null, `Start: n = ${n}, m = ${m}. Calculăm P(${n}), A(${n}, ${m}) și C(${n}, ${m}).`, { vars: { n, m } });
+
+  // ---- P(n) ----
+  st.phase = 'P'; let r = 1; st.fP = '1';
+  st.cells = { 1: 'ok' };
+  push('p-init', 'permutari: result = 1', { vars: { n, result: r } });
+  if (n < 2) push('p-loop', 'range(2, 2) e vid: bucla nu se execută.', { vars: { n, result: r } });
+  for (let i = 2; i <= n; i++) {
+    st.cells = {}; for (let j = 1; j < i; j++) st.cells[j] = 'ok'; st.cells[i] = 'cur';
+    const old = r; r *= i; st.fP += ' · ' + i;
+    push('p-mul', `i = ${i}: result = ${old} · ${i} = ${r}`, { vars: { n, i, result: r } });
+  }
+  st.P = r; st.cells = {}; for (let j = 1; j <= n; j++) st.cells[j] = 'ok';
+  push('p-ret', `P(${n}) = ${n}! = ${r}`, { kind: 'ok', vars: { n, result: r } });
+
+  // ---- A(n, m) ----
+  st.phase = 'A'; r = 1; st.fA = m === 0 ? '1 (produs vid)' : '';
+  st.cells = {}; for (let j = n - m + 1; j <= n; j++) st.cells[j] = 'on';
+  push('a-init', `aranjamente: result = 1; se înmulțesc ultimele m = ${m} numere: ${m ? (n - m + 1) + '…' + n : 'niciunul'}`, { vars: { n, m, result: r } });
+  for (let i = n - m + 1; i <= n; i++) {
+    for (let j = n - m + 1; j < i; j++) st.cells[j] = 'ok'; st.cells[i] = 'cur';
+    const old = r; r *= i; st.fA += (st.fA ? ' · ' : '') + i;
+    push('a-mul', `i = ${i}: result = ${old} · ${i} = ${r}`, { vars: { n, m, i, result: r } });
+  }
+  st.A = r; for (let j = n - m + 1; j <= n; j++) st.cells[j] = 'ok';
+  push('a-ret', `A(${n}, ${m}) = ${r}`, { kind: 'ok', vars: { n, m, result: r } });
+
+  // ---- C(n, m) ----
+  st.phase = 'C'; st.cells = {};
+  const k = Math.min(m, n - m);
+  push('c-k', k === m ? `k = min(${m}, ${n - m}) = ${k}` : `k = min(${m}, ${n - m}) = ${k}: folosim simetria C(${n}, ${m}) = C(${n}, ${k})`, { vars: { n, m, k } });
+  r = 1; st.fC = '1';
+  st.pascal = { [`${n - k},0`]: 'cur' };
+  push('c-init', `result = 1 = C(${n - k}, 0) — prima celulă din triunghiul lui Pascal`, { vars: { n, m, k, result: r } });
+  for (let i = 1; i <= k; i++) {
+    const num = n - k + i, old = r;
+    r = r * num / i;
+    for (const key in st.pascal) st.pascal[key] = 'on';
+    st.pascal[`${num},${i}`] = 'cur';
+    st.cells = { [num]: 'cur', [i]: 'on' };
+    st.fC = `${old} · ${num} / ${i}`;
+    push('c-mul', `i = ${i}: result = ${old} · ${num} / ${i} = ${r} = C(${num}, ${i})`, { vars: { n, k, i, 'n-k+i': num, result: r } });
+  }
+  st.C = r; st.cells = {};
+  for (const key in st.pascal) st.pascal[key] = 'on';
+  st.pascal[`${n},${k}`] = 'ok';
+  if (k !== m) st.pascal[`${n},${m}`] = 'alt';
+  st.fC = k ? `C(${n}, ${k})` : '1';
+  push('c-ret', `C(${n}, ${m}) = ${r}` + (k !== m ? ` (= C(${n}, ${k}), celula simetrică)` : ''), { kind: 'ok', vars: { n, m, k, result: r } });
+
+  // ---- verificare ----
+  st.phase = 'end';
+  let mf = 1; for (let i = 2; i <= m; i++) mf *= i;
+  push(null, `Verificare: C(${n}, ${m}) · ${m}! = ${st.C} · ${mf} = ${st.C * mf} = A(${n}, ${m}) ✓`, { kind: 'ok', vars: { 'P(n)': st.P, 'A(n,m)': st.A, 'C(n,m)': st.C } });
+  return steps;
+}
+
+function render(step, view) {
+  const s = step.st;
+  if (!s) { view.innerHTML = ''; return; }
+  const { n, m } = s;
+  const card = (key, name, formula, value, phase) => {
+    const cls = s.phase === phase ? 'active' : (value !== null ? 'done' : '');
+    return `<div class="rc ${cls}"><div class="h"><span>${name}</span><span>${key}</span></div>
+      <div class="f">${formula ? Viz.esc(formula) : '&nbsp;'}</div><div class="v">${value === null ? '—' : value}</div></div>`;
+  };
+  let nums = '';
+  for (let j = 1; j <= n; j++) nums += `<div class="cell ${s.cells[j] || 'dim'}">${j}</div>`;
+  const label = { P: 'P(n): se înmulțesc 1·2·…·n', A: `A(n,m): se înmulțesc ultimele m = ${m} numere`, C: 'C(n,m): numărătorul (n−k+i) — galben, numitorul i — albastru', end: 'Gata', '': 'Numerele 1…n' }[s.phase];
+
+  let pascal = '';
+  for (let row = 0; row <= n; row++) {
+    let cells = '';
+    for (let c = 0; c <= row; c++) cells += `<div class="pc ${s.pascal[`${row},${c}`] || ''}" title="C(${row}, ${c})">${binom(row, c)}</div>`;
+    pascal += `<div class="prow"><span class="rl">n=${row}</span>${cells}<span class="rl"></span></div>`;
+  }
+
+  view.innerHTML = `
+    <div class="label section-label">${Viz.esc(label)}</div>
+    <div class="cells">${nums}</div>
+    <div class="label section-label" style="margin-top:22px">Rezultate</div>
+    <div class="res">
+      ${card(`n = ${n}`, 'P(n) = n!', s.fP, s.P, 'P')}
+      ${card(`m = ${m}`, 'A(n, m)', s.fA, s.A, 'A')}
+      ${card(`k = ${Math.min(m, n - m)}`, 'C(n, m)', s.fC, s.C, 'C')}
+    </div>
+    <div class="label section-label" style="margin-top:22px">Triunghiul lui Pascal: valorile intermediare din combinari() sunt C(n−k+i, i)</div>
+    <div class="pascal">${pascal}</div>`;
+}
+
+Viz.page({
+  lang: 'ro', logo: 'Σ', badge: 'Set N1 · Problema 1',
+  title: 'Numărul de permutări, combinări și aranjamente',
+  subtitle: 'P(n), A(n, m), C(n, m) pas cu pas: produse, simplificare și triunghiul lui Pascal',
+  stageTitle: 'Calculul pas cu pas',
+  legend: [['var(--yellow)', 'Pasul curent'], ['var(--accent-2)', 'Folosit / parcurs'], ['var(--green)', 'Rezultat'], ['var(--purple)', 'Celula simetrică C(n, n−m)']],
+  code: CODE, speed: 600, generate, render,
+  init() {
+    const n = document.getElementById('n'), m = document.getElementById('m');
+    n.addEventListener('change', () => { m.max = n.value; if (Number(m.value) > Number(n.value)) m.value = n.value; });
+  },
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Problema celor n ture</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .rk { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 26px; align-items: start; }
+  @media (max-width: 760px) { .rk { grid-template-columns: minmax(0, 1fr); } }
+  .board { display: grid; gap: 0; border: 2px solid var(--line-2); border-radius: 8px; overflow: hidden; width: max-content; }
+  .board.win { border-color: var(--green); box-shadow: 0 0 0 4px var(--green-soft); }
+  .sq { display: grid; place-items: center; position: relative; font-size: calc(var(--s) * .62); line-height: 1;
+        width: var(--s); height: var(--s); transition: background .15s; }
+  .sq.l { background: #2a3045; }
+  .sq.d { background: #1c2131; }
+  .sq.att::after { content: ''; position: absolute; inset: 0; background: rgba(129,140,248,.16); }
+  .sq.beam::after { content: ''; position: absolute; inset: 0; background: rgba(240,82,101,.30); }
+  .sq.chk { outline: 3px solid var(--yellow); outline-offset: -3px; z-index: 1; }
+  .sq.chk.no { outline-color: var(--red); }
+  .sq .x { color: var(--red); font: 700 calc(var(--s) * .5) var(--sans); }
+  .rook { color: #f4f4f8; text-shadow: 0 2px 6px rgba(0,0,0,.6); font-variant-emoji: text; }
+  .rook.new { color: var(--yellow); }
+  .board.win .rook { color: #86efac; }
+  .bwrap { display: grid; grid-template-columns: auto auto; gap: 4px; }
+  .coord { font: 11px var(--mono); color: var(--faint); display: grid; place-items: center; }
+  .coords-top { display: grid; }
+  .coords-left { display: grid; }
+  .gallery { display: flex; flex-wrap: wrap; gap: 8px; max-height: 250px; overflow: auto; }
+  .mb { display: grid; gap: 1px; padding: 3px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; }
+  .mb i { width: 7px; height: 7px; background: #1c2131; display: block; }
+  .mb i.q { background: var(--green); }
+  .mb.new { border-color: var(--green); }
+  .mbw { display: grid; justify-items: center; gap: 2px; font: 10px var(--mono); color: var(--muted); }
+  .bar { height: 8px; background: var(--panel-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); margin-top: 8px; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); transition: width .2s; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<template id="params">
+  <label class="field"><span class="label">n (1..6)</span><input type="number" id="n" min="1" max="6" value="4"></label>
+  <button class="btn small green" id="nextSol" type="button">Următoarea soluție ⏭</button>
+  <span class="hint">Programul acceptă n ≤ 20; animația pas cu pas merge până la n = 6 (720 de soluții).</span>
+</template>
+
+<template id="theory">
+  <section class="card span">
+    <h3>Problema 3 (b): n ture care nu se atacă</h3>
+    <p>Pe o tablă n × n trebuie așezate n ture astfel încât oricare două să nu se atace. Tura atacă pe <b>linie</b> și pe <b>coloană</b>.</p>
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Soluții</div><div class="v">n!</div></div>
+      <div class="stat"><div class="label">Format ieșire</div><div class="v">c1,c2,…,cn</div></div>
+      <div class="stat"><div class="label">Verificare</div><div class="v">O(1) cu col_used[]</div></div>
+    </div>
+  </section>
+  <section class="card">
+    <h3>De ce exact n!</h3>
+    <p>Pe fiecare linie stă exact o tură (n ture, n linii, nu pot fi două pe aceeași linie). Fie <code>c[i]</code> coloana turei de pe linia i. Două ture se atacă doar dacă au aceeași coloană, deci c[1..n] are valori <b>distincte</b>:</p>
+    <div class="formula">soluție ⇔ (c1, …, cn) e o permutare a lui {1, …, n}</div>
+    <p>Bijecția soluții ↔ permutări dă exact <b>n!</b> soluții. Programul este backtracking-ul pentru permutări, „îmbrăcat” în limbajul tablei de șah.</p>
+  </section>
+  <section class="card">
+    <h3>Verificarea în O(1)</h3>
+    <p>În loc să comparăm tura nouă cu toate cele deja puse, ținem <code>col_used[j]</code> = „pe coloana j există deja o tură”. Verificarea devine o singură citire de vector.</p>
+    <p>Comparație cu <b>n regine</b>: acolo se adaugă și diagonalele (i − j și i + j), și numărul soluțiilor nu mai are o formulă simplă (pentru n = 8: 92).</p>
+  </section>
+  <section class="card">
+    <h3>Câte soluții?</h3>
+    <table class="t">
+      <tr><th>n</th><th>n!</th><th>noduri vizitate</th></tr>
+      <tr><td>4</td><td>24</td><td>65</td></tr>
+      <tr><td>6</td><td>720</td><td>1 957</td></tr>
+      <tr><td>8</td><td>40 320</td><td>109 601</td></tr>
+      <tr><td>10</td><td>3 628 800</td><td>9 864 101</td></tr>
+    </table>
+    <p class="hint">Programul cere confirmare de la n = 9 (362 880 de linii).</p>
+  </section>
+</template>
+
+<script src="../assets/viz.js"></script>
+<script>
+const CODE = {
+  title: { py: 'problema3_ture.py — ture(n, out)', cpp: 'problema3_ture.cpp — back(i)' },
+  py: `
+def ture(n, out):
+    c = [0] * (n + 1)              # c[i] = coloana turei de pe linia i
+    col_used = [False] * (n + 1)
+    count = 0
+
+    def back(i):
+        nonlocal count
+        if i > n:                                           #@base
+            count += 1                                      #@save
+            out.write(",".join(map(str, c[1:])) + "\\n")     #@save
+            return
+        for j in range(1, n + 1):
+            if not col_used[j]:     # coloana j e liberă => tura (i, j) nu e atacată  #@check
+                col_used[j] = True                          #@set
+                c[i] = j                                    #@set
+                back(i + 1)
+                col_used[j] = False                         #@unmark
+
+    back(1)
+    return count`,
+  cpp: `
+void back(int i) {
+    if (i > n) {                                            //@base
+        for (int k = 1; k <= n; ++k) std::cout << c[k] << (k < n ? ',' : '\\n');   //@save
+        return;
+    }
+    for (int j = 1; j <= n; ++j) {
+        if (!colUsed[j]) {          // coloana j e liberă => tura (i, j) nu e atacată  //@check
+            colUsed[j] = true;                              //@set
+            c[i] = j;                                       //@set
+            back(i + 1);
+            colUsed[j] = false;                             //@unmark
+        }
+    }
+}`,
+};
+
+const fact = n => (n <= 1 ? 1 : n * fact(n - 1));
+
+function generate() {
+  const n = Number(document.getElementById('n').value);
+  if (!Number.isInteger(n) || n < 1 || n > 6) throw new Error('n trebuie să fie un întreg din [1, 6].');
+  const total = fact(n);
+  const c = Array(n + 1).fill(0), colUsed = Array(n + 1).fill(false);
+  const sols = [];
+  const steps = [];
+  let depth = 0, nodes = 0;
+
+  const push = (line, msg, extra = {}) => steps.push({
+    line, msg, kind: extra.kind,
+    st: { n, total, c: c.slice(), colUsed: colUsed.slice(), depth, row: extra.row, col: extra.col, blocked: extra.blocked, fresh: extra.fresh, newRook: extra.newRook, nsol: sols.length },
+    vars: { i: extra.row ?? '-', ...(extra.col !== undefined ? { j: extra.col } : {}), 'c[1..n]': c.slice(1, depth + 1).join(',') || '–', count: sols.length },
+    stats: { 'Soluții': `${sols.length} / ${total}`, 'Noduri': nodes },
+  });
+
+  function back(i) {
+    nodes++;
+    push('base', `back(${i}): i > n (${n})? ${i > n ? 'da — toate cele n ture sunt așezate' : `nu — căutăm o coloană pentru linia ${i}`}`, { row: i });
+    if (i > n) {
+      sols.push(c.slice(1));
+      push('save', `Soluția #${sols.length}: ${c.slice(1).join(',')}`, { kind: 'ok', row: i, fresh: true });
+      return;
+    }
+    for (let j = 1; j <= n; j++) {
+      if (colUsed[j]) {
+        const r = c.slice(1, i).indexOf(j) + 1;
+        push('check', `(${i}, ${j}): coloana ${j} e ocupată de tura de pe linia ${r} → atac, sărim`, { kind: 'bad', row: i, col: j, blocked: r });
+        continue;
+      }
+      push('check', `(${i}, ${j}): coloana ${j} e liberă → tura nu e atacată`, { row: i, col: j });
+      colUsed[j] = true; c[i] = j; depth = i;
+      push('set', `Punem tura pe (${i}, ${j}): c[${i}] = ${j}, col_used[${j}] = True`, { row: i, col: j, newRook: true });
+      back(i + 1);
+      colUsed[j] = false; depth = i - 1;
+      push('unmark', `Ridicăm tura de pe (${i}, ${j}): col_used[${j}] = False, încercăm coloana următoare`, { row: i, col: j });
+    }
+  }
+
+  back(1);
+  push(null, `Gata: ${sols.length} soluții = ${n}! — fiecare soluție este o permutare a coloanelor 1…${n}.`, { kind: 'ok' });
+  steps.forEach(s => { s.st.sols = sols; });
+  return steps;
+}
+
+function render(step, view) {
+  const st = step.st;
+  if (!st) { view.innerHTML = ''; return; }
+  const { n } = st;
+  const size = Math.max(40, Math.min(64, Math.floor(380 / n)));
+  const rookAt = (r, col) => r <= st.depth && st.c[r] === col;
+  let cells = '';
+  for (let r = 1; r <= n; r++) {
+    for (let col = 1; col <= n; col++) {
+      const cls = [(r + col) % 2 ? 'd' : 'l'];
+      // zona atacată pe coloană: sub fiecare tură deja așezată
+      for (let rr = 1; rr <= st.depth; rr++) if (st.c[rr] === col && r > rr) cls.push('att');
+      if (st.blocked && col === st.col && r >= st.blocked && r <= st.row) cls.push('beam');
+      const checking = step.line === 'check' && r === st.row && col === st.col;
+      if (checking) cls.push('chk', st.blocked ? 'no' : '');
+      let inner = '';
+      if (rookAt(r, col)) inner = `<span class="rook ${st.newRook && r === st.row ? 'new' : ''}">♜︎</span>`;
+      else if (checking && st.blocked) inner = '<span class="x">✕</span>';
+      cells += `<div class="sq ${cls.join(' ')}">${inner}</div>`;
+    }
+  }
+  let top = '', left = '';
+  for (let k = 1; k <= n; k++) {
+    top += `<span class="coord" style="width:${size}px">${k}</span>`;
+    left += `<span class="coord" style="height:${size}px">${k}</span>`;
+  }
+  let used = '', cArr = '';
+  for (let k = 1; k <= n; k++) {
+    used += `<div class="cell ${st.colUsed[k] ? 'on' : ''} ${step.line === 'check' && st.col === k ? (st.blocked ? 'bad' : 'cur') : ''}"><span class="idx">${k}</span>${st.colUsed[k] ? 'T' : 'F'}</div>`;
+    cArr += `<div class="cell ${k <= st.depth ? (st.fresh ? 'ok' : 'on') : 'empty'}"><span class="idx">c[${k}]</span>${k <= st.depth ? st.c[k] : '_'}</div>`;
+  }
+  const shown = st.sols.slice(Math.max(0, st.nsol - 36), st.nsol);
+  const first = Math.max(0, st.nsol - 36);
+  const gallery = shown.map((s, idx) => {
+    let g = '';
+    for (let r = 0; r < n; r++) for (let col = 1; col <= n; col++) g += `<i class="${s[r] === col ? 'q' : ''}"></i>`;
+    const fresh = st.fresh && first + idx === st.nsol - 1;
+    return `<div class="mbw"><div class="mb ${fresh ? 'new' : ''}" style="grid-template-columns:repeat(${n},7px)">${g}</div>${s.join(',')}</div>`;
+  }).join('');
+
+  view.innerHTML = `
+    <div class="rk">
+      <div>
+        <div class="label section-label">Tabla ${n} × ${n} — linia curentă: ${st.row && st.row <= n ? st.row : '—'}</div>
+        <div class="bwrap">
+          <span></span><div class="coords-top" style="grid-template-columns:repeat(${n},${size}px)">${top}</div>
+          <div class="coords-left" style="grid-template-rows:repeat(${n},${size}px)">${left}</div>
+          <div class="board ${st.fresh ? 'win' : ''}" style="--s:${size}px;grid-template-columns:repeat(${n},${size}px)">${cells}</div>
+        </div>
+      </div>
+      <div>
+        <div class="label section-label">col_used[1..n] — coloane ocupate</div>
+        <div class="cells">${used}</div>
+        <div class="label section-label" style="margin-top:26px">c[i] — coloana turei de pe linia i</div>
+        <div class="cells">${cArr}</div>
+        <div class="label" style="margin-top:22px">Soluții: ${st.nsol} / ${st.total} = ${n}!</div>
+        <div class="bar"><i style="width:${(100 * st.nsol / st.total).toFixed(1)}%"></i></div>
+      </div>
+    </div>
+    <div class="label section-label" style="margin:22px 0 8px">Soluții găsite${st.nsol > 36 ? ' (ultimele 36)' : ''}</div>
+    <div class="gallery">${gallery || '<span class="hint">încă niciuna</span>'}</div>`;
+  const g = view.querySelector('.gallery');
+  g.scrollTop = g.scrollHeight;
+}
+
+Viz.page({
+  lang: 'ro', logo: '♜', badge: 'Set N1 · Problema 3b',
+  title: 'n ture pe tabla n × n care nu se atacă',
+  subtitle: 'Câte o tură pe linie; coloanele trebuie să fie distincte, deci soluțiile sunt cele n! permutări',
+  stageTitle: 'Așezarea turelor (backtracking)',
+  legend: [['var(--yellow)', 'Celula verificată'], ['rgba(129,140,248,.6)', 'Coloană atacată'], ['var(--red)', 'Conflict pe coloană'], ['var(--green)', 'Soluție']],
+  code: CODE, speed: 260, generate, render,
+  init(viz) {
+    document.getElementById('nextSol').addEventListener('click', () => viz.seek(s => s.line === 'save'));
+    document.getElementById('n').addEventListener('change', viz.reset);
+  },
+});
+</script>
+</body>
+</html>

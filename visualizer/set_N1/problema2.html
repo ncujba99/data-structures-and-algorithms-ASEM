@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generare prin backtracking</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .arrays { display: grid; grid-template-columns: auto auto; gap: 26px 40px; justify-content: start; align-items: end; }
+  @media (max-width: 640px) { .arrays { grid-template-columns: minmax(0, 1fr); } }
+  .flag { font: 600 10px var(--mono); color: var(--faint); text-align: center; margin-top: 4px; }
+  .flag.t { color: var(--accent-2); }
+  .col { display: grid; justify-items: center; }
+  .range-note { font: 12px var(--mono); color: var(--muted); margin-top: 10px; min-height: 18px; }
+  .tree-wrap { margin-top: 18px; overflow-x: auto; }
+  svg.st .e { stroke: var(--line-2); stroke-width: 1.6; }
+  svg.st .e.on { stroke: var(--yellow); stroke-width: 3; }
+  svg.st circle { fill: var(--panel-2); stroke: var(--idle); stroke-width: 1.8; }
+  svg.st .n.path circle { fill: var(--accent-fill); stroke: var(--accent-2); }
+  svg.st .n.cur circle { fill: var(--yellow-fill); stroke: var(--yellow); stroke-width: 3; }
+  svg.st .n.ok circle { fill: var(--green-fill); stroke: var(--green); }
+  svg.st .n.ghost { opacity: .13; }
+  svg.st text { font: 700 11px var(--mono); fill: var(--text); text-anchor: middle; dominant-baseline: central; }
+  svg.st text.no { font: 600 9px var(--mono); fill: #86efac; }
+  svg.st text.lvl { font: 600 10px var(--mono); fill: var(--faint); text-anchor: start; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<template id="params">
+  <label class="field wide"><span class="label">Mulțimea A (4 numere distincte)</span><input type="text" id="elems" value="1, 2, 3, 4"></label>
+  <label class="field"><span class="label">Ce generăm</span>
+    <select id="mode">
+      <option value="perm">Permutări (k = 4) — 24</option>
+      <option value="comb">Combinări de 3 — 4</option>
+      <option value="aranj">Aranjamente de 3 — 24</option>
+    </select>
+  </label>
+  <button class="btn small green" id="nextSol" type="button">Următoarea soluție ⏭</button>
+</template>
+
+<template id="theory">
+  <section class="card span">
+    <h3>Problema 2</h3>
+    <p>Pentru A = {a1, a2, a3, a4} se afișează toate <b>permutările</b>, toate <b>combinările</b> și toate <b>aranjamentele</b> de m = 3 elemente. Toate se generează prin <b>backtracking</b> pe vectori:</p>
+    <ul>
+      <li><code>sol[]</code> — soluția curentă (indici în A), completată poziție cu poziție;</li>
+      <li><code>used[]</code> — <code>used[i] = True</code> dacă A[i] e deja în soluție (doar pentru permutări și aranjamente).</li>
+    </ul>
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Permutări</div><div class="v">4! = 24</div></div>
+      <div class="stat"><div class="label">Combinări de 3</div><div class="v">C(4,3) = 4</div></div>
+      <div class="stat"><div class="label">Aranjamente de 3</div><div class="v">A(4,3) = 24</div></div>
+    </div>
+  </section>
+  <section class="card">
+    <h3>Arborele spațiului soluțiilor</h3>
+    <p>Fiecare nod e un apel <code>back(pos)</code>; o muchie înseamnă „pe poziția pos punem A[i]”. Frunzele de pe nivelul k sunt soluțiile. Backtracking-ul parcurge arborele <b>în adâncime</b> (DFS), de la stânga la dreapta.</p>
+    <div class="formula">noduri = 1 + n + n(n−1) + … + n!/(n−k)!</div>
+    <p>Pentru permutări de 4: 1 + 4 + 12 + 24 + 24 = 65 de noduri, 24 de frunze.</p>
+  </section>
+  <section class="card">
+    <h3>Aranjamente (și permutări)</h3>
+    <p>Ordinea contează, deci pe fiecare poziție încercăm <b>toate</b> elementele încă nefolosite. Când k = n se obțin permutările.</p>
+    <div class="formula">A(n,k) = n · (n−1) · … · (n−k+1)</div>
+    <p>Marcajul <code>used[i]</code> se pune înainte de apelul recursiv și se <b>scoate la revenire</b>, ca elementul să poată fi folosit în alte ramuri.</p>
+  </section>
+  <section class="card">
+    <h3>Combinări</h3>
+    <p>Ordinea nu contează, deci alegem indicii <b>strict crescător</b>: fiecare submulțime apare o singură dată și <code>used[]</code> nu mai e necesar.</p>
+    <div class="formula">start ≤ i ≤ n − (k − pos)</div>
+    <p>Limita de sus taie ramurile care nu mai au destule elemente ca să completeze cele k − pos poziții rămase.</p>
+  </section>
+</template>
+
+<script src="../assets/viz.js"></script>
+<script>
+const CODE = {
+  arr: {
+    title: { py: 'problema2.py — aranjamente(a, k), k = n dă permutările', cpp: 'problema2.cpp — backAranj(...)' },
+    py: `
+def aranjamente(a, k):
+    n = len(a)
+    sol = [0] * k
+    used = [False] * n
+    result = []
+
+    def back(pos):
+        if pos == k:                                  #@base
+            result.append([a[i] for i in sol])        #@save
+            return
+        for i in range(n):
+            if not used[i]:                           #@check
+                used[i] = True                        #@set
+                sol[pos] = i                          #@set
+                back(pos + 1)
+                used[i] = False                       #@unmark
+
+    back(0)
+    return result`,
+    cpp: `
+void backAranj(const std::vector<int>& a, int k, int pos,
+               std::vector<int>& sol, std::vector<bool>& used, Solutions& result) {
+    if (pos == k) {                                   //@base
+        std::vector<int> item;                        //@save
+        for (int i : sol) item.push_back(a[i]);       //@save
+        result.push_back(item);                       //@save
+        return;
+    }
+    for (int i = 0; i < (int)a.size(); ++i) {
+        if (!used[i]) {                               //@check
+            used[i] = true;                           //@set
+            sol[pos] = i;                             //@set
+            backAranj(a, k, pos + 1, sol, used, result);
+            used[i] = false;                          //@unmark
+        }
+    }
+}`,
+  },
+  comb: {
+    title: { py: 'problema2.py — combinari(a, k)', cpp: 'problema2.cpp — backComb(...)' },
+    py: `
+def combinari(a, k):
+    n = len(a)
+    sol = [0] * k
+    result = []
+
+    def back(pos, start):
+        if pos == k:                                     #@base
+            result.append([a[i] for i in sol])           #@save
+            return
+        # rămân k - pos poziții de completat, deci i nu poate depăși n - (k - pos)
+        for i in range(start, n - (k - pos) + 1):        #@loop
+            sol[pos] = i                                 #@set
+            back(pos + 1, i + 1)
+
+    back(0, 0)
+    return result`,
+    cpp: `
+void backComb(const std::vector<int>& a, int k, int pos, int start,
+              std::vector<int>& sol, Solutions& result) {
+    if (pos == k) {                                      //@base
+        std::vector<int> item;                           //@save
+        for (int i : sol) item.push_back(a[i]);          //@save
+        result.push_back(item);                          //@save
+        return;
+    }
+    int n = (int)a.size();
+    // rămân k - pos poziții de completat, deci i nu poate depăși n - (k - pos)
+    for (int i = start; i <= n - (k - pos); ++i) {       //@loop
+        sol[pos] = i;                                    //@set
+        backComb(a, k, pos + 1, i + 1, sol, result);
+    }
+}`,
+  },
+};
+
+function readSet() {
+  const parts = document.getElementById('elems').value.split(/[\s,;]+/).filter(Boolean);
+  if (parts.length !== 4) throw new Error(`Introduceți exact 4 numere (acum: ${parts.length}).`);
+  const a = parts.map(p => {
+    if (!/^-?\d+$/.test(p)) throw new Error(`„${p}” nu este un număr întreg.`);
+    return Number(p);
+  });
+  if (new Set(a).size !== a.length) throw new Error('Elementele unei mulțimi trebuie să fie distincte.');
+  return a;
+}
+
+let TREE = null; // noduri + coordonate, comune tuturor pașilor
+
+function generate() {
+  const a = readSet(), n = a.length;
+  const mode = document.getElementById('mode').value;
+  const k = mode === 'perm' ? n : 3;
+  const comb = mode === 'comb';
+  const code = comb ? 'comb' : 'arr';
+
+  const nodes = [{ id: 0, parent: -1, depth: 0, label: '·', children: [], sol: 0 }];
+  const sol = Array(k).fill(null), used = Array(n).fill(false);
+  const results = [];
+  const steps = [];
+  let calls = 0;
+  const total = comb ? 4 : (k === 4 ? 24 : 24);
+
+  const push = (line, msg, extra = {}) => steps.push({
+    code, line, msg, ...extra,
+    st: { a, k, comb, sol: sol.slice(), used: used.slice(), results: results.slice(), visible: nodes.length, ...extra.st },
+    vars: { pos: extra.pos, ...(extra.i !== undefined ? { i: extra.i } : {}), sol: '[' + sol.map(x => x === null ? '_' : x).join(', ') + ']', ...(comb ? {} : { used: '[' + used.map(u => (u ? 'T' : 'F')).join(' ') + ']' }) },
+    stats: { 'Soluții': `${results.length} / ${total}`, 'Apeluri back': calls },
+  });
+  const pathOf = id => { const p = []; for (let v = id; v >= 0; v = nodes[v].parent) p.push(v); return p; };
+
+  function back(pos, start, node) {
+    calls++;
+    const st = { node, path: pathOf(node), pos, start };
+    push('base', `back(${comb ? `pos=${pos}, start=${start}` : `pos=${pos}`}): pos == k (${k})? ${pos === k ? 'da' : 'nu'}`, { pos, st });
+    if (pos === k) {
+      results.push(sol.map(i => a[i]));
+      nodes[node].sol = results.length;
+      push('save', `Soluția #${results.length}: (${results[results.length - 1].join(', ')})`, { kind: 'ok', pos, st: { ...st, fresh: true } });
+      return;
+    }
+    if (comb) {
+      const hi = n - (k - pos);
+      push('loop', `i ia valori de la ${start} la n − (k − pos) = ${hi}` + (hi < n - 1 ? ` (indicii > ${hi} nu mai lasă destule elemente)` : ''), { pos, st: { ...st, hi } });
+      for (let i = start; i <= hi; i++) {
+        sol[pos] = i;
+        const child = nodes.length;
+        nodes.push({ id: child, parent: node, depth: pos + 1, label: String(a[i]), children: [], sol: 0 });
+        nodes[node].children.push(child);
+        push('set', `sol[${pos}] = ${i}  →  pe poziția ${pos} punem A[${i}] = ${a[i]}`, { pos, i, st: { ...st, hi, i, node: child, path: pathOf(child) } });
+        back(pos + 1, i + 1, child);
+        sol[pos] = null;
+        if (i < hi) push('loop', `revenire în back(pos=${pos}): încercăm i = ${i + 1}`, { pos, i: i + 1, st: { ...st, hi, i: i + 1 } });
+      }
+      return;
+    }
+    for (let i = 0; i < n; i++) {
+      if (used[i]) {
+        push('check', `i = ${i}: A[${i}] = ${a[i]} e deja folosit (used[${i}] = True) → sărim`, { kind: 'bad', pos, i, st: { ...st, i, blocked: true } });
+        continue;
+      }
+      push('check', `i = ${i}: A[${i}] = ${a[i]} e liber`, { pos, i, st: { ...st, i } });
+      used[i] = true; sol[pos] = i;
+      const child = nodes.length;
+      nodes.push({ id: child, parent: node, depth: pos + 1, label: String(a[i]), children: [], sol: 0 });
+      nodes[node].children.push(child);
+      push('set', `used[${i}] = True, sol[${pos}] = ${i}  →  apel back(${pos + 1})`, { pos, i, st: { ...st, i, node: child, path: pathOf(child) } });
+      back(pos + 1, 0, child);
+      used[i] = false; sol[pos] = null;
+      push('unmark', `revenire în back(${pos}): used[${i}] = False — A[${i}] = ${a[i]} poate fi folosit în alte ramuri`, { pos, i, st: { ...st, i } });
+    }
+  }
+
+  back(0, 0, 0);
+  push(null, `Gata: ${results.length} ${comb ? 'combinări' : k === n ? 'permutări' : 'aranjamente'}, ${calls} apeluri ale lui back.`, { kind: 'ok', st: { node: -1, path: [], pos: '-', done: true } });
+
+  // Coordonate: frunzele pe rând de la stânga la dreapta, părintele la mijlocul copiilor.
+  let leafX = 0;
+  (function place(id) {
+    const nd = nodes[id];
+    if (!nd.children.length) { nd.x = leafX++; return; }
+    nd.children.forEach(place);
+    nd.x = (nodes[nd.children[0]].x + nodes[nd.children[nd.children.length - 1]].x) / 2;
+  })(0);
+  TREE = { nodes, leaves: leafX, k };
+  return steps;
+}
+
+function drawTree(st) {
+  const { nodes, leaves, k } = TREE;
+  const colW = leaves > 12 ? 34 : 56, rowH = 58, padX = 46, padY = 22, r = 13;
+  const W = padX + leaves * colW + 10, H = padY * 2 + k * rowH + 16;
+  const X = nd => padX + nd.x * colW + colW / 2, Y = nd => padY + nd.depth * rowH;
+  const onPath = new Set(st.path || []);
+  let edges = '', circles = '', lv = '';
+  for (let d = 0; d <= k; d++) lv += `<text class="lvl" x="2" y="${padY + d * rowH}">pos ${d}</text>`;
+  for (const nd of nodes) {
+    const ghost = nd.id >= st.visible ? ' ghost' : '';
+    if (nd.parent >= 0) {
+      const p = nodes[nd.parent];
+      edges += `<line class="e${onPath.has(nd.id) ? ' on' : ''}${ghost}" x1="${X(p)}" y1="${Y(p)}" x2="${X(nd)}" y2="${Y(nd)}" ${ghost ? 'opacity=".13"' : ''}/>`;
+    }
+    const found = nd.sol && nd.sol <= st.results.length;
+    const cls = nd.id === st.node ? 'cur' : (found ? 'ok' : onPath.has(nd.id) ? 'path' : '');
+    circles += `<g class="n ${cls}${ghost}"><circle cx="${X(nd)}" cy="${Y(nd)}" r="${r}"/><text x="${X(nd)}" y="${Y(nd)}">${Viz.esc(nd.label)}</text>` +
+      (found ? `<text class="no" x="${X(nd)}" y="${Y(nd) + r + 9}">#${nd.sol}</text>` : '') + '</g>';
+  }
+  return `<svg class="st" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:100%;height:auto;display:block;margin:0 auto">${lv}${edges}${circles}</svg>`;
+}
+
+function render(step, view) {
+  const st = step.st;
+  if (!st || !TREE) { view.innerHTML = ''; return; }
+  const { a, k, comb } = st;
+  const n = a.length;
+  let cellsA = '', flags = '';
+  for (let i = 0; i < n; i++) {
+    let cls = '';
+    if (comb && st.hi !== undefined && !st.done && (i < st.start || i > st.hi)) cls = 'dim';
+    if (!comb && st.used[i]) cls = 'on';
+    if (st.i === i && !st.done) cls = st.blocked ? 'bad' : 'cur';
+    cellsA += `<div class="col"><div class="cell ${cls}"><span class="idx">A[${i}]</span>${a[i]}</div>` +
+      (comb ? '' : `<div class="flag ${st.used[i] ? 't' : ''}">${st.used[i] ? 'used' : 'liber'}</div>`) + '</div>';
+  }
+  let cellsS = '';
+  for (let p = 0; p < k; p++) {
+    const v = st.sol[p];
+    const cls = v === null ? 'empty' : (st.fresh ? 'ok' : (p === st.pos - 1 || (p === st.pos && step.line === 'set') ? 'cur' : 'on'));
+    cellsS += `<div class="cell ${cls}"><span class="idx">sol[${p}]</span>${v === null ? '_' : a[v]}</div>`;
+  }
+  const note = comb && st.hi !== undefined && !st.done ? `pos = ${st.pos}: i ∈ [start, n − (k − pos)] = [${st.start}, ${st.hi}]` : (!comb && !st.done ? `pos = ${st.pos}: căutăm un element nefolosit pentru sol[${st.pos}]` : '');
+  const out = st.results.map((r, idx) => `<span class="o ${idx === st.results.length - 1 && st.fresh ? 'new' : ''}">${idx + 1}. (${r.join(', ')})</span>`).join('');
+
+  view.innerHTML = `
+    <div class="arrays">
+      <div><div class="label section-label">Mulțimea A${comb ? '' : ' și used[]'}</div><div class="cells">${cellsA}</div></div>
+      <div><div class="label section-label">Soluția curentă sol[] (k = ${k})</div><div class="cells">${cellsS}</div></div>
+    </div>
+    <div class="range-note">${Viz.esc(note)}</div>
+    <div class="label" style="margin-top:14px">Arborele apelurilor back() — se construiește pe măsură ce e parcurs</div>
+    <div class="tree-wrap">${drawTree(st)}</div>
+    <div class="label section-label" style="margin:14px 0 8px">Soluții găsite</div>
+    <div class="out-list">${out || '<span class="hint">încă niciuna</span>'}</div>`;
+}
+
+Viz.page({
+  lang: 'ro', logo: '⑂', badge: 'Set N1 · Problema 2',
+  title: 'Permutări, combinări și aranjamente prin backtracking',
+  subtitle: 'A = {a1, a2, a3, a4}: arborele căutării, vectorii sol[] și used[], soluțiile pe rând',
+  stageTitle: 'Backtracking pe vectori',
+  legend: [['var(--yellow)', 'Nodul / elementul curent'], ['var(--accent-2)', 'Pe drumul curent / folosit'], ['var(--green)', 'Soluție'], ['var(--red)', 'Respins (deja folosit)']],
+  code: CODE, speed: 260, generate, render,
+  init(viz) {
+    document.getElementById('mode').addEventListener('change', viz.reset);
+    document.getElementById('nextSol').addEventListener('click', () => viz.seek(s => s.line === 'save'));
+  },
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Permutările mulțimii A</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .p3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+  @media (max-width: 760px) { .p3 { grid-template-columns: minmax(0, 1fr); } }
+  .stack { display: flex; flex-direction: column-reverse; gap: 6px; }
+  .frame { border: 1px solid var(--line-2); border-radius: 10px; padding: 8px 10px; background: var(--panel-2); transition: border-color .2s; }
+  .frame.now { border-color: var(--yellow); box-shadow: 0 0 0 3px var(--yellow-soft); }
+  .frame .fh { display: flex; justify-content: space-between; font: 600 12px var(--mono); margin-bottom: 6px; }
+  .frame .fh span:last-child { color: var(--muted); font-weight: 500; }
+  .mini { display: flex; gap: 4px; }
+  .mini span { width: 28px; height: 24px; border-radius: 6px; display: grid; place-items: center; font: 600 11px var(--mono);
+               border: 1px solid var(--line); color: var(--faint); }
+  .mini span.cur { border-color: var(--yellow); color: var(--text); background: var(--yellow-soft); }
+  .mini span.pick { border-color: var(--accent-2); color: var(--text); background: var(--accent-soft); }
+  .mini span.skip { border-color: rgba(240,82,101,.45); color: #fda4af; }
+  .mini span.done { color: var(--muted); border-style: dashed; }
+  .base { font: 12px var(--mono); color: var(--faint); text-align: center; padding: 4px; border-top: 2px solid var(--line-2); margin-top: 2px; }
+  .odo { display: flex; gap: 8px; flex-wrap: wrap; }
+  .dig { border: 1px solid var(--line-2); border-radius: 10px; padding: 5px 8px; text-align: center; background: var(--panel-2); min-width: 52px; }
+  .dig .d { font: 700 18px var(--mono); }
+  .dig .b { font: 11px var(--mono); color: var(--muted); }
+  .dig.cur { border-color: var(--yellow); }
+  .bar { height: 8px; background: var(--panel-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); margin-top: 8px; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); transition: width .2s; }
+  .console { background: #07080c; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font: 12.5px/1.6 var(--mono);
+             height: 196px; overflow: auto; color: #b9c0d4; white-space: pre; }
+  .console .new { color: #86efac; background: var(--green-soft); }
+  .math-line { font: 12px var(--mono); color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<template id="params">
+  <label class="field wide"><span class="label">Elementele lui A (1..6 numere distincte)</span><input type="text" id="elems" value="1, 2, 3"></label>
+  <button class="btn small green" id="nextSol" type="button">Următoarea permutare ⏭</button>
+  <span class="hint">Programul acceptă n ≤ 10; animația merge până la n = 6 (720 de permutări).</span>
+</template>
+
+<template id="theory">
+  <section class="card span">
+    <h3>Problema 3 (a): toate permutările lui A = {a1, …, an}</h3>
+    <p>n și elementele se citesc de la tastatură. Generarea folosește backtracking pe vectori: <code>sol[]</code> — permutarea curentă (indici în A), <code>used[]</code> — elementele deja puse.</p>
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Număr de permutări</div><div class="v">n!</div></div>
+      <div class="stat"><div class="label">Apeluri back</div><div class="v">Σ n!/(n−p)!</div></div>
+      <div class="stat"><div class="label">Timp</div><div class="v">O(n · n!)</div></div>
+      <div class="stat"><div class="label">Memorie (fără ieșire)</div><div class="v">O(n)</div></div>
+    </div>
+  </section>
+  <section class="card">
+    <h3>Stiva apelurilor</h3>
+    <p>Fiecare apel <code>back(pos)</code> are propria variabilă <code>i</code> a buclei. Adâncimea stivei e cel mult n + 1, deci memoria suplimentară este O(n), chiar dacă soluțiile sunt n!.</p>
+    <p>În animație fiecare cadru arată, pentru indicii 0…n−1, ce s-a întâmplat: <b>ales</b>, <b>sărit</b> (deja folosit), <b>terminat</b> (ramura explorată).</p>
+  </section>
+  <section class="card">
+    <h3>Ordinea lexicografică și codul Lehmer</h3>
+    <p>Pe poziția p rămân n − p elemente libere; fie r<sub>p</sub> ∈ [0, n−p−1] al câtelea dintre ele e ales. Vectorul (r<sub>0</sub>, …, r<sub>n−1</sub>) este <b>codul Lehmer</b> și se schimbă exact ca un contor cu baze n, n−1, …, 1:</p>
+    <div class="formula">nr = 1 + Σ r<sub>p</sub> · (n−1−p)!</div>
+    <p>De aceea permutările ies în <b>ordine lexicografică</b> (după indici) și numărul lor total este n · (n−1) · … · 1 = n!.</p>
+  </section>
+  <section class="card">
+    <h3>Câte apeluri face back?</h3>
+    <div class="formula">Σ<sub>p=0..n</sub> n!/(n−p)! ≈ e · n!</div>
+    <table class="t">
+      <tr><th>n</th><th>n!</th><th>apeluri back</th></tr>
+      <tr><td>3</td><td>6</td><td>16</td></tr>
+      <tr><td>4</td><td>24</td><td>65</td></tr>
+      <tr><td>5</td><td>120</td><td>326</td></tr>
+      <tr><td>6</td><td>720</td><td>1957</td></tr>
+      <tr><td>10</td><td>3 628 800</td><td>9 864 101</td></tr>
+    </table>
+  </section>
+</template>
+
+<script src="../assets/viz.js"></script>
+<script>
+const CODE = {
+  title: { py: 'problema3_permutari.py — permutari(a, out)', cpp: 'problema3_permutari.cpp — back(pos)' },
+  py: `
+def permutari(a, out):
+    n = len(a)
+    sol = [0] * n
+    used = [False] * n
+    count = 0
+
+    def back(pos):
+        nonlocal count
+        if pos == n:                                    #@base
+            count += 1                                  #@save
+            out.write(f"{count}. ({', '.join(str(a[i]) for i in sol)})\\n")   #@save
+            return
+        for i in range(n):
+            if not used[i]:                             #@check
+                used[i] = True                          #@set
+                sol[pos] = i                            #@set
+                back(pos + 1)
+                used[i] = False                         #@unmark
+
+    back(0)
+    return count`,
+  cpp: `
+void back(int pos) {
+    if (pos == n) {                                         //@base
+        std::cout << ++countSol << ". (";                   //@save
+        for (int i = 0; i < n; ++i) std::cout << (i ? ", " : "") << a[sol[i]];   //@save
+        std::cout << ")\\n";                                 //@save
+        return;
+    }
+    for (int i = 0; i < n; ++i) {
+        if (!used[i]) {                                     //@check
+            used[i] = true;                                 //@set
+            sol[pos] = i;                                   //@set
+            back(pos + 1);
+            used[i] = false;                                //@unmark
+        }
+    }
+}`,
+};
+
+const fact = n => (n <= 1 ? 1 : n * fact(n - 1));
+
+function readSet() {
+  const parts = document.getElementById('elems').value.split(/[\s,;]+/).filter(Boolean);
+  if (parts.length < 1 || parts.length > 6) throw new Error(`Introduceți între 1 și 6 numere (acum: ${parts.length}).`);
+  const a = parts.map(p => { if (!/^-?\d+$/.test(p)) throw new Error(`„${p}” nu este un număr întreg.`); return Number(p); });
+  if (new Set(a).size !== a.length) throw new Error('Elementul există deja în mulțime: elementele trebuie să fie distincte.');
+  return a;
+}
+
+function generate() {
+  const a = readSet(), n = a.length, total = fact(n);
+  const sol = Array(n).fill(null), used = Array(n).fill(false);
+  const frames = [];
+  const lines = [];
+  let count = 0, calls = 0;
+
+  const push = (line, msg, extra = {}) => steps.push({
+    line, msg, ...extra,
+    st: { a, n, total, sol: sol.slice(), used: used.slice(), count, frames: frames.map(f => ({ ...f, tried: f.tried.slice() })), lines: lines.length, fresh: extra.fresh },
+    vars: { n, pos: frames.length ? frames[frames.length - 1].pos : '-', ...(extra.i !== undefined ? { i: extra.i } : {}), count },
+    stats: { 'Permutări': `${count} / ${total}`, 'Apeluri back': calls, 'Adâncime stivă': frames.length },
+  });
+  const steps = [];
+
+  function back(pos) {
+    calls++;
+    frames.push({ pos, i: null, tried: Array(n).fill(''), rank: null });
+    const f = frames[frames.length - 1];
+    push('base', `back(${pos}): pos == n (${n})? ${pos === n ? 'da — permutare completă' : 'nu'}`);
+    if (pos === n) {
+      count++;
+      lines.push(`${count}. (${sol.map(i => a[i]).join(', ')})`);
+      push('save', `Permutarea #${count}: (${sol.map(i => a[i]).join(', ')})`, { kind: 'ok', fresh: true });
+      frames.pop();
+      return;
+    }
+    for (let i = 0; i < n; i++) {
+      f.i = i;
+      if (used[i]) {
+        f.tried[i] = 'skip';
+        push('check', `back(${pos}), i = ${i}: A[${i}] = ${a[i]} este deja în permutare → sărim`, { kind: 'bad', i });
+        continue;
+      }
+      f.tried[i] = 'cur';
+      f.rank = used.slice(0, i).filter(u => !u).length;
+      push('check', `back(${pos}), i = ${i}: A[${i}] = ${a[i]} e liber`, { i });
+      used[i] = true; sol[pos] = i; f.tried[i] = 'pick';
+      push('set', `used[${i}] = True, sol[${pos}] = ${i} → apel back(${pos + 1})`, { i });
+      back(pos + 1);
+      used[i] = false; sol[pos] = null; f.tried[i] = 'done'; f.rank = null;
+      push('unmark', `revenire în back(${pos}): used[${i}] = False`, { i });
+    }
+    f.i = null;
+    push(null, `back(${pos}) a încercat toți indicii → revine${pos ? ` în back(${pos - 1})` : ''}`);
+    frames.pop();
+  }
+
+  back(0);
+  const out = lines;
+  push(null, `Total: ${count} permutări (${n}! = ${total}), ${calls} apeluri ale lui back.`, { kind: 'ok' });
+  steps.forEach(s => { s.st.out = out; });
+  return steps;
+}
+
+function render(step, view) {
+  const st = step.st;
+  if (!st) { view.innerHTML = ''; return; }
+  const { a, n } = st;
+
+  // stiva
+  let stack = '';
+  st.frames.forEach((f, idx) => {
+    const top = idx === st.frames.length - 1;
+    let mini = '';
+    for (let i = 0; i < n; i++) {
+      let cls = f.tried[i];
+      if (top && f.i === i && cls === '') cls = 'cur';
+      if (top && f.i === i && cls === 'skip') cls = 'skip cur';
+      mini += `<span class="${cls}" title="i = ${i}">${a[i]}</span>`;
+    }
+    const pick = f.pos < n && st.sol[f.pos] !== null && st.sol[f.pos] !== undefined ? `sol[${f.pos}] = ${st.sol[f.pos]} (A = ${a[st.sol[f.pos]]})` : (f.pos === n ? 'pos == n → afișare' : `i = ${f.i === null ? '–' : f.i}`);
+    stack += `<div class="frame ${top ? 'now' : ''}"><div class="fh"><span>back(pos = ${f.pos})</span><span>${pick}</span></div>${f.pos < n ? `<div class="mini">${mini}</div>` : ''}</div>`;
+  });
+  stack = `<div class="base">main() → back(0)</div>` + stack;
+
+  // vectori
+  let usedC = '', solC = '';
+  for (let i = 0; i < n; i++) {
+    usedC += `<div class="cell ${st.used[i] ? 'on' : ''}"><span class="idx">used[${i}]</span>${st.used[i] ? 'T' : 'F'}</div>`;
+    const v = st.sol[i];
+    solC += `<div class="cell ${v === null ? 'empty' : st.fresh ? 'ok' : 'on'}"><span class="idx">sol[${i}]</span>${v === null ? '_' : a[v]}</div>`;
+  }
+
+  // codul Lehmer (contor cu baze n, n-1, ..., 1)
+  let digits = '', lehmer = [];
+  for (let p = 0; p < n; p++) {
+    const f = st.frames[p];
+    const rr = f && f.rank !== null ? f.rank : null;
+    lehmer.push(rr);
+    const isTop = st.frames.length - 1 === p;
+    digits += `<div class="dig ${isTop ? 'cur' : ''}"><div class="d">${rr === null ? '·' : rr}</div><div class="b">pos ${p}: din ${n - p}</div></div>`;
+  }
+  const full = lehmer.every(x => x !== null);
+  let idxTxt = '';
+  if (full) {
+    let num = 1, parts = [];
+    lehmer.forEach((r, p) => { num += r * fact(n - 1 - p); if (r) parts.push(`${r}·${n - 1 - p}!`); });
+    idxTxt = `nr = 1 + ${parts.join(' + ') || '0'} = ${num}`;
+  }
+
+  // ieșirea
+  const shown = st.out.slice(Math.max(0, st.lines - 40), st.lines);
+  const first = Math.max(0, st.lines - 40);
+  const consoleHtml = shown.map((l, k) => `<div class="${st.fresh && first + k === st.lines - 1 ? 'new' : ''}">${Viz.esc(l)}</div>`).join('') || '<span style="color:var(--faint)">(nimic afișat încă)</span>';
+
+  view.innerHTML = `
+    <div class="p3">
+      <div>
+        <div class="label section-label">Stiva apelurilor (vârful sus)</div>
+        <div class="stack">${stack}</div>
+      </div>
+      <div>
+        <div class="label section-label">used[]</div>
+        <div class="cells">${usedC}</div>
+        <div class="label section-label" style="margin-top:26px">sol[] — permutarea curentă</div>
+        <div class="cells">${solC}</div>
+        <div class="label section-label" style="margin-top:26px">Codul Lehmer: al câtelea element liber e ales</div>
+        <div class="odo">${digits}</div>
+        <div class="math-line">${idxTxt ? Viz.esc(idxTxt) : '&nbsp;'}</div>
+        <div class="label" style="margin-top:16px">Progres: ${st.count} / ${st.total} = n!</div>
+        <div class="bar"><i style="width:${(100 * st.count / st.total).toFixed(1)}%"></i></div>
+      </div>
+    </div>
+    <div class="label section-label" style="margin:20px 0 8px">Ieșirea programului (stdout)</div>
+    <div class="console" id="console">${consoleHtml}</div>`;
+  const c = view.querySelector('#console');
+  c.scrollTop = c.scrollHeight;
+}
+
+Viz.page({
+  lang: 'ro', logo: 'n!', badge: 'Set N1 · Problema 3a',
+  title: 'Toate permutările mulțimii A',
+  subtitle: 'Stiva apelurilor back(pos), vectorii sol[] / used[] și contorul Lehmer care numără până la n!',
+  stageTitle: 'Generarea permutărilor',
+  legend: [['var(--yellow)', 'Indicele încercat acum'], ['var(--accent-2)', 'Ales / folosit'], ['var(--red)', 'Sărit: deja folosit'], ['var(--green)', 'Permutare afișată']],
+  code: CODE, speed: 220, generate, render,
+  init(viz) { document.getElementById('nextSol').addEventListener('click', () => viz.seek(s => s.line === 'save')); },
+});
+</script>
+</body>
+</html>

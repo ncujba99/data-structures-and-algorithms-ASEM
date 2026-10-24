@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Калькулятор на дереве выражения</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .field.expr input { width: 420px; max-width: calc(100vw - 70px); font-family: var(--mono); }
+  .phases { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .ph { font: 600 12px var(--mono); padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--faint); }
+  .ph.on { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .ph.done { color: var(--green); border-color: rgba(34,197,94,.5); }
+  .tape { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 18px; }
+  .tape .cell { min-width: 34px; height: 34px; font-size: 14px; padding: 0 6px; }
+  .tape .cell.done { opacity: .45; }
+  .opstack { display: flex; gap: 5px; align-items: center; min-height: 40px; margin-top: 18px; }
+  .opstack .lbl { font: 11px var(--mono); color: var(--faint); }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+  @media (max-width: 700px) { .two { grid-template-columns: minmax(0, 1fr); } }
+  .calc-list { margin: 0; padding-left: 26px; font: 13px/1.7 var(--mono); color: #c8ccda; }
+  .calc-list li.new { color: var(--yellow); }
+  .notation { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font: 13px var(--mono); margin-top: 8px; }
+  .notation span:nth-child(odd) { color: var(--muted); }
+  .notation span:nth-child(even) { word-break: break-word; }
+  .result { font: 700 30px var(--mono); color: var(--green); margin-top: 6px; }
+  .result.bad { color: var(--red); font-size: 18px; }
+  .forest-note { font: 11px var(--mono); color: var(--faint); text-align: right; margin-top: 4px; }
+  .svg-box { overflow-x: auto; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<template id="params">
+  <label class="field expr"><span class="label">Выражение</span><input type="text" id="expr" value="((3 + 1) * 3) / ((9 - 5) + 2) - (3 * (7 - 4) + 6)"></label>
+  <label class="field"><span class="label">Форма записи</span>
+    <select id="form"><option value="infix">обычная (со скобками)</option><option value="postfix">постфиксная</option></select>
+  </label>
+  <div class="field"><span class="label">Примеры</span>
+    <div class="row">
+      <button class="btn small" type="button" data-ex="infix|((3 + 1) * 3) / ((9 - 5) + 2) - (3 * (7 - 4) + 6)">из методички</button>
+      <button class="btn small" type="button" data-ex="postfix|3 1 + 3 * 9 5 - 2 + / 3 7 4 - * 6 + -">то же в постфиксе</button>
+      <button class="btn small" type="button" data-ex="infix|(3 + 4) * 2">(3+4)*2</button>
+      <button class="btn small" type="button" data-ex="infix|10 - 2 - 3">10-2-3</button>
+      <button class="btn small" type="button" data-ex="postfix|4 0 /">ошибка: 4 0 /</button>
+      <button class="btn small" type="button" data-ex="postfix|1 2 3 +">ошибка: 1 2 3 +</button>
+    </div>
+  </div>
+</template>
+
+<template id="theory">
+  <section class="card span">
+    <h3>Задание 3: калькулятор на бинарном дереве</h3>
+    <p>Выражение из 4 действий и скобок записано в <b>постфиксной</b> форме. Дерево выражения: листья — числа, остальные узлы — бинарные операции, у каждого ровно 2 ребёнка. Значение считается обходом <b>postorder</b>. Дополнительно калькулятор принимает обычную запись со скобками и переводит её в постфиксную (алгоритм сортировочной станции).</p>
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Пример методички</div><div class="v">−13</div></div>
+      <div class="stat"><div class="label">Построение</div><div class="v">O(m)</div></div>
+      <div class="stat"><div class="label">Вычисление</div><div class="v">O(m)</div></div>
+      <div class="stat"><div class="label">Чисел = операций + 1</div><div class="v">10 = 9 + 1</div></div>
+    </div>
+  </section>
+  <section class="card">
+    <h3>Три записи = три обхода</h3>
+    <table class="t">
+      <tr><th>Обход</th><th>Запись</th></tr>
+      <tr><td>preorder</td><td>префиксная (польская)</td></tr>
+      <tr><td>inorder</td><td>обычная, нужны скобки</td></tr>
+      <tr><td>postorder</td><td>постфиксная (ОПЗ)</td></tr>
+    </table>
+    <p>В постфиксной записи операция стоит сразу после <b>обоих</b> операндов, поэтому скобки не нужны: <code>1 2 - 3 -</code> = (1−2)−3, а <code>1 2 3 - -</code> = 1−(2−3).</p>
+  </section>
+  <section class="card">
+    <h3>Построение: стек поддеревьев</h3>
+    <ul>
+      <li>число → новый лист в стек;</li>
+      <li>операция → снять <b>правый</b>, затем левый операнд, создать узел, положить в стек;</li>
+      <li>в конце в стеке ровно одно дерево.</li>
+    </ul>
+    <p>Критерий корректности: размер стека s<sub>k</sub> ≥ 1 после каждого символа, перед операцией s ≥ 2, в конце s = 1.</p>
+  </section>
+  <section class="card">
+    <h3>Сортировочная станция (Дейкстра, 1961)</h3>
+    <ul>
+      <li>число → сразу в выход;</li>
+      <li>«(» → в стек операций; «)» → переносить операции в выход до «(»;</li>
+      <li>операция → вытолкнуть из стека операции с приоритетом ≥ текущего (левая ассоциативность), затем положить её;</li>
+      <li>в конце перенести весь стек в выход.</li>
+    </ul>
+  </section>
+  <section class="card">
+    <h3>Скобки при выводе (inorder)</h3>
+    <p>Левый ребёнок берётся в скобки, если его приоритет <b>меньше</b>, чем у родителя. Правый — если меньше, <b>или равен</b> и родитель — «−» или «/»:</p>
+    <div class="formula">10 − (2 − 3) ≠ 10 − 2 − 3</div>
+    <p>Отрицательные числа выводятся в скобках: 3 − (−2).</p>
+  </section>
+</template>
+
+<script src="../assets/viz.js"></script>
+<script>
+const CODE = {
+  shunt: {
+    title: { py: 'zadanie3_kalkulyator.py — infix_to_postfix', cpp: 'zadanie3_kalkulyator.cpp — infixToPostfix' },
+    py: `
+def infix_to_postfix(infix):
+    output, ops = [], []
+    for t in tokenize_infix(infix):                     #@tok
+        if t == "(":                                    #@lp
+            ops.append(t)                               #@lp
+        elif t == ")":
+            while ops and ops[-1] != "(":               #@rp-pop
+                output.append(ops.pop())                #@rp-pop
+            if not ops:                                 #@err-rp
+                raise ExpressionError("лишняя закрывающая скобка")   #@err-rp
+            ops.pop()                                   #@rp-drop
+        elif t in OPERATORS:
+            # Все операции левоассоциативны: выталкиваем операции с приоритетом >= текущего.
+            while ops and ops[-1] != "(" and precedence(ops[-1]) >= precedence(t):   #@op-pop
+                output.append(ops.pop())                #@op-pop
+            ops.append(t)                               #@op-push
+        else:
+            output.append(t)                            #@num
+    while ops:                                          #@end
+        if ops[-1] == "(":                              #@err-lp
+            raise ExpressionError("не закрыта скобка")  #@err-lp
+        output.append(ops.pop())                        #@end
+    return output                                       #@ret`,
+    cpp: `
+std::vector<std::string> infixToPostfix(const std::string& infix) {
+    std::vector<std::string> output, ops;
+    for (const std::string& t : tokenizeInfix(infix)) {          //@tok
+        if (t == "(") {                                          //@lp
+            ops.push_back(t);                                    //@lp
+        } else if (t == ")") {
+            while (!ops.empty() && ops.back() != "(") {          //@rp-pop
+                output.push_back(ops.back());                    //@rp-pop
+                ops.pop_back();                                  //@rp-pop
+            }
+            if (ops.empty()) throw std::runtime_error("лишняя закрывающая скобка");   //@err-rp
+            ops.pop_back();                                      //@rp-drop
+        } else if (isOperator(t)) {
+            while (!ops.empty() && ops.back() != "(" &&
+                   precedence(ops.back()[0]) >= precedence(t[0])) {   //@op-pop
+                output.push_back(ops.back());                    //@op-pop
+                ops.pop_back();                                  //@op-pop
+            }
+            ops.push_back(t);                                    //@op-push
+        } else {
+            output.push_back(t);                                 //@num
+        }
+    }
+    while (!ops.empty()) {                                       //@end
+        if (ops.back() == "(") throw std::runtime_error("не закрыта скобка");   //@err-lp
+        output.push_back(ops.back());                            //@end
+        ops.pop_back();                                          //@end
+    }
+    return output;                                               //@ret
+}`,
+  },
+  build: {
+    title: { py: 'zadanie3_kalkulyator.py — build_tree', cpp: 'zadanie3_kalkulyator.cpp — buildTree' },
+    py: `
+def build_tree(postfix):
+    stack = []
+    for s in postfix:
+        if len(s) == 1 and s in OPERATORS:
+            if len(stack) < 2:                                     #@err-few
+                raise ExpressionError(f"операции «{s}» не хватает операндов")   #@err-few
+            right = stack.pop()                                    #@pop
+            left = stack.pop()                                     #@pop
+            stack.append(Node(Token(True, op=s), left, right))     #@push-op
+        else:
+            v = parse_number(s)                                    #@num
+            if v is None:                                          #@err-num
+                raise ExpressionError(f"«{s}» - не число и не операция")   #@err-num
+            stack.append(Node(Token(False, value=v)))              #@num
+    if not stack:                                                  #@err-empty
+        raise ExpressionError("выражение пустое")                  #@err-empty
+    if len(stack) > 1:                                             #@err-many
+        raise ExpressionError(f"лишние операнды: в стеке осталось поддеревьев - "   #@err-many
+                              f"{len(stack)}, а должно быть 1")    #@err-many
+    return stack[0]                                                #@ret`,
+    cpp: `
+ENode* buildTree(const std::vector<std::string>& postfix) {
+    std::vector<ENode*> stack;
+    try {
+        for (const std::string& s : postfix) {
+            if (isOperator(s)) {
+                if (stack.size() < 2)                                          //@err-few
+                    throw std::runtime_error("операции «" + s + "» не хватает операндов");   //@err-few
+                ENode* right = stack.back(); stack.pop_back();                 //@pop
+                ENode* left = stack.back(); stack.pop_back();                  //@pop
+                stack.push_back(new ENode({true, s[0], 0}, left, right));      //@push-op
+            } else {
+                double v;
+                if (!parseNumber(s, v))                                        //@err-num
+                    throw std::runtime_error("«" + s + "» - не число и не операция");   //@err-num
+                stack.push_back(new ENode({false, 0, v}));                     //@num
+            }
+        }
+        if (stack.empty()) throw std::runtime_error("выражение пустое");      //@err-empty
+        if (stack.size() > 1)                                                  //@err-many
+            throw std::runtime_error("лишние операнды: в стеке осталось поддеревьев - " +   //@err-many
+                                     std::to_string(stack.size()) + ", а должно быть 1");   //@err-many
+    } catch (...) {
+        for (ENode*& n : stack) clear(n);   // освобождаем уже построенные поддеревья
+        throw;
+    }
+    return stack.back();                                                       //@ret
+}`,
+  },
+  eval: {
+    title: { py: 'zadanie3_kalkulyator.py — evaluate (postorder)', cpp: 'zadanie3_kalkulyator.cpp — evaluate (postorder)' },
+    py: `
+def evaluate(node, steps):
+    """Обратный порядок (postorder): левое поддерево, правое поддерево, узел."""
+    if not node.info.is_op:                         #@leaf
+        return node.info.value                      #@leaf
+    a = evaluate(node.left, steps)                  #@goleft
+    b = evaluate(node.right, steps)                 #@goright
+    op = node.info.op                               #@calc
+    if op == "+":
+        r = a + b
+    elif op == "-":
+        r = a - b
+    elif op == "*":
+        r = a * b
+    else:
+        if b == 0:                                  #@div0
+            raise ExpressionError(f"деление на ноль: {format_number(a)} / 0")   #@div0
+        r = a / b
+    steps.append(f"{operand(a)} {op} {operand(b)} = {format_number(r)}")   #@calc
+    return r                                        #@calc`,
+    cpp: `
+double evaluate(const ENode* node, std::vector<std::string>& steps) {
+    if (!node->info.isOp) return node->info.value;          //@leaf
+    double a = evaluate(node->left, steps);                 //@goleft
+    double b = evaluate(node->right, steps);                //@goright
+    double r = 0;                                           //@calc
+    switch (node->info.op) {
+        case '+': r = a + b; break;
+        case '-': r = a - b; break;
+        case '*': r = a * b; break;
+        case '/':
+            if (b == 0) throw std::runtime_error("деление на ноль: " + formatNumber(a) + " / 0");   //@div0
+            r = a / b;
+            break;
+    }
+    steps.push_back(operand(a) + " " + node->info.op + " " + operand(b) +   //@calc
+                    " = " + formatNumber(r));               //@calc
+    return r;                                               //@calc
+}`,
+  },
+};
+
+const OPS = '+-*/';
+const prec = op => ('+-'.includes(op) ? 1 : 2);
+const fmtNum = x => String(Number(x.toPrecision(10)));
+const operand = x => (x < 0 ? `(${fmtNum(x)})` : fmtNum(x));
+const label = n => (n.op ? n.op : fmtNum(n.value));
+const clone = n => (n ? { ...n, left: clone(n.left), right: clone(n.right) } : null);
+
+class ExprError extends Error {}
+
+function tokenizeInfix(s) {
+  const out = [];
+  for (let i = 0; i < s.length;) {
+    const c = s[i];
+    if (/\s/.test(c)) i++;
+    else if (/[\d.]/.test(c)) { let j = i; while (j < s.length && /[\d.]/.test(s[j])) j++; out.push(s.slice(i, j)); i = j; }
+    else if ('+-*/()'.includes(c)) { out.push(c); i++; }
+    else throw new ExprError(`недопустимый символ «${c}»`);
+  }
+  return out;
+}
+const parseNumber = s => (/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(s) && isFinite(Number(s)) ? Number(s) : null);
+
+function generate() {
+  const text = document.getElementById('expr').value.trim();
+  const form = document.getElementById('form').value;
+  const steps = [];
+  let phase = form === 'infix' ? 'shunt' : 'build';
+  const base = { form, phase };
+  const push = (code, line, msg, st, o = {}) => steps.push({ code, line, msg, kind: o.kind, st: { ...base, phase, ...st }, vars: o.vars || {}, stats: o.stats || {} });
+  let nextId = 1;
+
+  try {
+    // ---------- 1. перевод в постфиксную форму ----------
+    let postfix;
+    if (form === 'infix') {
+      const tokens = tokenizeInfix(text);
+      const output = [], ops = [];
+      const snap = (idx, extra = {}) => ({ tokens, idx, output: output.slice(), ops: ops.slice(), ...extra });
+      const stats = () => ({ 'Выход': output.length, 'Стек операций': ops.length });
+      push('shunt', 'tok', `Разбиваем строку на элементы: ${tokens.join(' ') || '(пусто)'} — ${tokens.length} шт.`, snap(-1), { stats: stats() });
+      tokens.forEach((t, idx) => {
+        if (t === '(') { ops.push(t); push('shunt', 'lp', '«(» → в стек операций', snap(idx), { stats: stats(), vars: { t } }); }
+        else if (t === ')') {
+          while (ops.length && ops[ops.length - 1] !== '(') {
+            output.push(ops.pop());
+            push('shunt', 'rp-pop', `«)»: переносим «${output[output.length - 1]}» из стека в выход`, snap(idx), { stats: stats(), vars: { t } });
+          }
+          if (!ops.length) throw new ExprError('лишняя закрывающая скобка');
+          ops.pop();
+          push('shunt', 'rp-drop', '«)»: дошли до «(» — выбрасываем пару скобок', snap(idx), { stats: stats(), vars: { t } });
+        } else if (OPS.includes(t)) {
+          while (ops.length && ops[ops.length - 1] !== '(' && prec(ops[ops.length - 1]) >= prec(t)) {
+            const top = ops[ops.length - 1];
+            output.push(ops.pop());
+            push('shunt', 'op-pop', `«${t}»: на вершине «${top}» с приоритетом ${prec(top)} ≥ ${prec(t)} → в выход`, snap(idx), { stats: stats(), vars: { t, 'ops[-1]': top } });
+          }
+          ops.push(t);
+          push('shunt', 'op-push', `«${t}» → в стек операций`, snap(idx), { stats: stats(), vars: { t } });
+        } else {
+          output.push(t);
+          push('shunt', 'num', `число ${t} → сразу в выход`, snap(idx), { stats: stats(), vars: { t } });
+        }
+      });
+      while (ops.length) {
+        if (ops[ops.length - 1] === '(') throw new ExprError('не закрыта скобка');
+        output.push(ops.pop());
+        push('shunt', 'end', `Конец строки: переносим «${output[output.length - 1]}» из стека в выход`, snap(tokens.length), { stats: stats() });
+      }
+      postfix = output;
+      push('shunt', 'ret', `Постфиксная форма: ${postfix.join(' ')}`, snap(tokens.length), { kind: 'ok', stats: stats() });
+      base.postfixText = postfix.join(' ');
+    } else {
+      postfix = text.split(/\s+/).filter(Boolean);
+    }
+
+    // ---------- 2. построение дерева ----------
+    phase = 'build';
+    const stack = [];
+    const snapB = (idx, hl = {}) => ({ postfix, idx, forest: stack.map(clone), hl });
+    const statsB = () => ({ 'Элементов': postfix.length, 'Поддеревьев в стеке': stack.length });
+    push('build', null, `Строим дерево из постфиксной записи «${postfix.join(' ')}» со стеком поддеревьев.`, snapB(-1), { stats: statsB() });
+    postfix.forEach((s, idx) => {
+      if (s.length === 1 && OPS.includes(s)) {
+        if (stack.length < 2) throw new ExprError(`операции «${s}» не хватает операндов`);
+        const right = stack.pop(), left = stack.pop();
+        const nd = { id: nextId++, op: s, left, right };
+        stack.push(nd);
+        push('build', 'push-op', `«${s}»: снимаем правый (${label(right)}) и левый (${label(left)}) операнды, новый узел «${s}» → в стек`, snapB(idx, { [nd.id]: 'cur', [left.id]: 'path', [right.id]: 'path' }), { stats: statsB(), vars: { s, 'len(stack)': stack.length } });
+      } else {
+        const v = parseNumber(s);
+        if (v === null) throw new ExprError(`«${s}» - не число и не операция`);
+        const nd = { id: nextId++, value: v, left: null, right: null };
+        stack.push(nd);
+        push('build', 'num', `${s} — число: новый лист → в стек`, snapB(idx, { [nd.id]: 'cur' }), { stats: statsB(), vars: { s, 'len(stack)': stack.length } });
+      }
+    });
+    if (!stack.length) throw new ExprError('выражение пустое');
+    if (stack.length > 1) throw new ExprError(`лишние операнды: в стеке осталось поддеревьев - ${stack.length}, а должно быть 1`);
+    const root = stack[0];
+    push('build', 'ret', 'В стеке ровно одно дерево — это корень дерева выражения.', snapB(postfix.length), { kind: 'ok', stats: statsB() });
+
+    // ---------- 3. вычисление: обход postorder ----------
+    phase = 'eval';
+    const val = {}, calc = [];
+    let ops = 0, leaves = 0;
+    (function cnt(n) { if (!n) return; if (n.op) ops++; else leaves++; cnt(n.left); cnt(n.right); })(root);
+    const path = [];
+    const snapE = (cur, extra = {}) => ({ root, val: { ...val }, cur, path: path.slice(), calc: calc.slice(), ...extra });
+    const statsE = () => ({ 'Чисел': leaves, 'Операций': ops, 'Вычислено': calc.length });
+    push('eval', null, 'Вычисляем значение обходом postorder: левое поддерево, правое поддерево, узел.', snapE(null), { stats: statsE() });
+    function ev(n) {
+      path.push(n.id);
+      if (!n.op) {
+        val[n.id] = n.value;
+        push('eval', 'leaf', `Лист ${fmtNum(n.value)} — значение известно`, snapE(n.id), { stats: statsE() });
+        path.pop();
+        return n.value;
+      }
+      push('eval', 'goleft', `«${n.op}»: сначала вычисляем левое поддерево`, snapE(n.id), { stats: statsE() });
+      const a = ev(n.left);
+      push('eval', 'goright', `«${n.op}»: левое = ${fmtNum(a)}, теперь правое поддерево`, snapE(n.id), { stats: statsE(), vars: { a: fmtNum(a) } });
+      const b = ev(n.right);
+      let r;
+      if (n.op === '+') r = a + b; else if (n.op === '-') r = a - b; else if (n.op === '*') r = a * b;
+      else {
+        if (b === 0) {
+          push('eval', 'div0', `Деление на ноль: ${fmtNum(a)} / 0`, snapE(n.id, { errNode: n.id }), { kind: 'bad', stats: statsE(), vars: { a: fmtNum(a), b: fmtNum(b) } });
+          throw new ExprError(`деление на ноль: ${fmtNum(a)} / 0`);
+        }
+        r = a / b;
+      }
+      val[n.id] = r;
+      calc.push(`${operand(a)} ${n.op} ${operand(b)} = ${fmtNum(r)}`);
+      push('eval', 'calc', `${calc.length}) ${calc[calc.length - 1]}`, snapE(n.id), { kind: 'hit', stats: statsE(), vars: { a: fmtNum(a), b: fmtNum(b), r: fmtNum(r) } });
+      path.pop();
+      return r;
+    }
+    const result = ev(root);
+
+    // ---------- 4. итог ----------
+    phase = 'done';
+    const pre = [], post = [];
+    (function p(n) { if (!n) return; pre.push(label(n)); p(n.left); p(n.right); })(root);
+    (function p(n) { if (!n) return; p(n.left); p(n.right); post.push(label(n)); })(root);
+    const toInfix = n => {
+      if (!n.op) return operand(n.value);
+      const p = prec(n.op);
+      let l = toInfix(n.left), r = toInfix(n.right);
+      if (n.left.op && prec(n.left.op) < p) l = `(${l})`;
+      if (n.right.op) { const pr = prec(n.right.op); if (pr < p || (pr === p && '-/'.includes(n.op))) r = `(${r})`; }
+      return `${l} ${n.op} ${r}`;
+    };
+    push('eval', null, `Результат: ${fmtNum(result)}`, { root, val: { ...val }, cur: null, path: [], calc: calc.slice(), notations: { pre: pre.join(' '), in: toInfix(root), post: post.join(' ') }, result }, { kind: 'ok', stats: statsE() });
+  } catch (e) {
+    if (!(e instanceof ExprError)) throw e;
+    const last = steps[steps.length - 1];
+    if (last && last.line === 'div0') { last.st.error = e.message; last.msg = `Ошибка вычисления: ${e.message}.`; return steps; }
+    const lineErr = { 'не закрыта скобка': 'err-lp', 'лишняя закрывающая скобка': 'err-rp', 'выражение пустое': 'err-empty' }[e.message]
+      || (e.message.startsWith('операции') ? 'err-few' : e.message.startsWith('лишние') ? 'err-many' : e.message.startsWith('деление') ? 'div0' : e.message.startsWith('«') ? 'err-num' : null);
+    steps.push({ code: phase === 'shunt' ? 'shunt' : phase === 'build' ? 'build' : 'eval', line: lineErr, msg: `Ошибка в выражении: ${e.message}.`, kind: 'bad', st: { ...(last ? last.st : base), error: e.message }, stats: last ? last.stats : {} });
+  }
+  return steps;
+}
+
+function tree(roots, st, opts = {}) {
+  const onPath = new Set(st.path || []);
+  return Viz.drawBinary(roots, {
+    colW: 46, rowH: 62, r: 17, extraBottom: 10, gap: 0.9,
+    label: n => (n.op ? n.op : fmtNum(n.value)),
+    cls: n => {
+      if (st.errNode === n.id) return 'bad';
+      if (st.hl && st.hl[n.id]) return st.hl[n.id];
+      if (st.cur === n.id) return 'cur';
+      if (st.val && st.val[n.id] !== undefined) return n.op ? 'ok' : 'done';
+      return onPath.has(n.id) ? 'path' : '';
+    },
+    badge: n => (n.op && st.val && st.val[n.id] !== undefined ? fmtNum(st.val[n.id]) : ''),
+    edgeCls: (p, c) => (onPath.has(p.id) && onPath.has(c.id) ? 'on' : ''),
+    ...opts,
+  });
+}
+
+function render(step, view) {
+  const st = step.st;
+  if (!st) { view.innerHTML = ''; return; }
+  const order = st.form === 'infix' ? ['shunt', 'build', 'eval', 'done'] : ['build', 'eval', 'done'];
+  const names = { shunt: '1. Перевод в постфикс', build: (st.form === 'infix' ? '2' : '1') + '. Построение дерева', eval: (st.form === 'infix' ? '3' : '2') + '. Вычисление (postorder)', done: 'Итог' };
+  const cur = st.notations ? 'done' : st.phase;
+  const phases = order.map(p => `<span class="ph ${p === cur ? 'on' : order.indexOf(p) < order.indexOf(cur) ? 'done' : ''}">${names[p]}</span>`).join('');
+  let body = '';
+
+  if (st.tokens) { // shunting-yard
+    const toks = st.tokens.map((t, i) => `<div class="cell ${i === st.idx ? 'cur' : i < st.idx ? 'done' : ''}"><span class="idx">${i + 1}</span>${Viz.esc(t)}</div>`).join('');
+    const out = st.output.map(t => `<div class="cell on">${Viz.esc(t)}</div>`).join('') || '<span class="hint">пусто</span>';
+    const ops = st.ops.map((t, i) => `<div class="cell ${i === st.ops.length - 1 ? 'cur' : ''}">${Viz.esc(t)}</div>`).join('') || '<span class="hint">пусто</span>';
+    body = `<div class="label">Входная строка (элементы)</div><div class="tape">${toks}</div>
+      <div class="two" style="margin-top:22px">
+        <div><div class="label">Выход — постфиксная запись</div><div class="tape">${out}</div></div>
+        <div><div class="label">Стек операций (вершина справа)</div><div class="opstack">${ops}</div></div>
+      </div>`;
+  } else if (st.forest) { // построение
+    const toks = st.postfix.map((t, i) => `<div class="cell ${i === st.idx ? 'cur' : i < st.idx ? 'done' : ''}"><span class="idx">${i + 1}</span>${Viz.esc(t)}</div>`).join('');
+    body = `<div class="label">Постфиксная запись</div><div class="tape">${toks}</div>
+      <div class="label" style="margin-top:22px">Стек поддеревьев (вершина — справа): ${st.forest.length}</div>
+      <div class="svg-box">${st.forest.length ? tree(st.forest, st) : '<div class="hint" style="padding:30px 0;text-align:center">стек пуст</div>'}</div>`;
+  } else if (st.root) { // вычисление / итог
+    const calc = st.calc.map((c, i) => `<li class="${i === st.calc.length - 1 && step.line === 'calc' ? 'new' : ''}">${Viz.esc(c)}</li>`).join('') || '<span class="hint">пока ничего</span>';
+    const left = `<div class="label">Вычисление (обход в обратном порядке)</div><ol class="calc-list" style="margin-top:8px">${calc}</ol>`;
+    const right = st.notations
+      ? `<div class="label">Результат</div><div class="result">${fmtNum(st.result)}</div>
+         <div class="notation"><span>preorder</span><span>${Viz.esc(st.notations.pre)}</span><span>inorder</span><span>${Viz.esc(st.notations.in)}</span><span>postorder</span><span>${Viz.esc(st.notations.post)}</span></div>`
+      : `<div class="label">Как читать дерево</div><p class="hint" style="margin:8px 0 0">Значок у операции — её вычисленное значение. Операция считается только после обоих поддеревьев: это и есть обход postorder.</p>`;
+    body = `<div class="label">Дерево выражения</div><div class="svg-box">${tree([st.root], st)}</div><div class="two" style="margin-top:16px"><div>${left}</div><div>${right}</div></div>`;
+  }
+  if (st.error) body += `<div class="label" style="margin-top:18px">Ошибка</div><div class="result bad">${Viz.esc(st.error)}</div>`;
+  view.innerHTML = `<div class="phases">${phases}</div>${body}`;
+}
+
+Viz.page({
+  lang: 'ru', logo: '÷', badge: 'ЛР №5 · Задание 3',
+  title: 'Калькулятор на дереве выражения',
+  subtitle: 'Обычная запись → постфиксная (сортировочная станция) → дерево (стек поддеревьев) → значение (обход postorder)',
+  stageTitle: 'Разбор и вычисление выражения',
+  legend: [['var(--yellow)', 'Текущий элемент / узел'], ['var(--accent-2)', 'Снятые из стека / путь рекурсии'], ['var(--green)', 'Вычисленная операция'], ['var(--cyan)', 'Готовый лист'], ['var(--red)', 'Ошибка']],
+  code: CODE, speed: 500, generate, render,
+  init(viz) {
+    document.querySelectorAll('[data-ex]').forEach(b => b.addEventListener('click', () => {
+      const [form, expr] = b.dataset.ex.split('|');
+      document.getElementById('form').value = form;
+      document.getElementById('expr').value = expr;
+      viz.reset();
+      viz.play();
+    }));
+    document.getElementById('form').addEventListener('change', viz.reset);
+  },
+});
+</script>
+</body>
+</html>

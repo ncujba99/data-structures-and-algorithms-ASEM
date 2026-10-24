@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Вокзал на поисковом дереве</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .ops { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+  .field input#time { width: 80px; }
+  .field input#station { width: 130px; }
+  .tape { display: flex; flex-wrap: wrap; gap: 6px; min-height: 42px; }
+  .tape .cell { min-width: 46px; height: 38px; font-size: 14px; }
+  .empty-tree { color: var(--faint); text-align: center; padding: 60px 0; font: 14px var(--mono); }
+  .info-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .train { font: 13px var(--mono); border: 1px solid var(--line-2); border-radius: 10px; padding: 6px 10px; background: var(--panel-2); }
+  .train.ok { border-color: var(--green); background: var(--green-soft); }
+  .train b { color: var(--yellow); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<template id="params">
+  <div class="ops">
+    <label class="field"><span class="label">Номер (ключ)</span><input type="number" id="key" min="1" max="9999" value="45"></label>
+    <label class="field"><span class="label">Станция</span><input type="text" id="station" value="Кишинёв"></label>
+    <label class="field"><span class="label">Время</span><input type="text" id="time" value="07:05"></label>
+    <button class="btn small green" id="opInsert" type="button">＋ Добавить</button>
+    <button class="btn small" id="opSearch" type="button">⌕ Найти по номеру</button>
+    <button class="btn small red" id="opDelete" type="button">✕ Удалить</button>
+    <button class="btn small" id="opStation" type="button">Найти по станции</button>
+    <label class="field"><span class="label">Обход</span>
+      <select id="order"><option value="inorder">симметричный (inorder)</option><option value="preorder">прямой (preorder)</option><option value="postorder">обратный (postorder)</option></select>
+    </label>
+    <button class="btn small" id="opTraverse" type="button">▶ Обойти</button>
+    <button class="btn small" id="opDemo" type="button">Построить демо-дерево</button>
+    <button class="btn small" id="opClear" type="button">Очистить</button>
+  </div>
+</template>
+
+<template id="theory">
+  <section class="card span">
+    <h3>Задание 1 (Вариант 10): справочная вокзала</h3>
+    <p>Сведения о поездах дальнего следования (номер, станция назначения, время отправления) хранятся в <b>бинарном поисковом дереве</b>. <b>Ключевое поле — номер поезда</b>: он уникален и задаёт порядок в дереве.</p>
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Поиск по номеру</div><div class="v">O(h)</div></div>
+      <div class="stat"><div class="label">Добавление</div><div class="v">O(h)</div></div>
+      <div class="stat"><div class="label">Удаление</div><div class="v">O(h)</div></div>
+      <div class="stat"><div class="label">Поиск по станции</div><div class="v">O(n)</div></div>
+      <div class="stat"><div class="label">Высота h</div><div class="v">⌈log₂(n+1)⌉ … n</div></div>
+    </div>
+  </section>
+  <section class="card">
+    <h3>Инвариант поискового дерева</h3>
+    <div class="formula">ключи(левое(x)) &lt; ключ(x) &lt; ключи(правое(x))</div>
+    <p>Поэтому поиск идёт по одному пути от корня: при k &lt; ключ(x) — налево, иначе — направо. Число сравнений не больше высоты h.</p>
+    <p><b>Симметричный обход</b> (Л, узел, П) выдаёт ключи <b>по возрастанию</b> — так печатается список всех поездов без отдельной сортировки.</p>
+  </section>
+  <section class="card">
+    <h3>Удаление: три случая (методичка)</h3>
+    <ol>
+      <li><b>Лист</b> — просто убрать узел.</li>
+      <li><b>Один ребёнок</b> — поставить ребёнка на место узла.</li>
+      <li><b>Два ребёнка</b> — найти <b>предшественника</b> (самый правый узел левого поддерева), переписать его данные в удаляемый узел и удалить сам предшественник. У предшественника нет правого ребёнка, поэтому это случай 1 или 2.</li>
+    </ol>
+    <p>Попробуйте удалить 50 в демо-дереве: предшественник — 40.</p>
+  </section>
+  <section class="card">
+    <h3>Три обхода</h3>
+    <table class="t">
+      <tr><th>Обход</th><th>Порядок</th><th>Демо-дерево</th></tr>
+      <tr><td>inorder</td><td>Л, узел, П</td><td class="mono">20 30 35 40 50 60 65 70 80</td></tr>
+      <tr><td>preorder</td><td>узел, Л, П</td><td class="mono">50 30 20 40 35 70 60 65 80</td></tr>
+      <tr><td>postorder</td><td>Л, П, узел</td><td class="mono">20 35 40 30 65 60 80 70 50</td></tr>
+    </table>
+    <p>Postorder используется для удаления всего дерева: узел освобождается только после обоих детей.</p>
+  </section>
+  <section class="card">
+    <h3>Почему станция — не ключ</h3>
+    <p>Дерево упорядочено по номеру, поэтому про станцию в узле ничего не известно заранее: поезда до одной станции могут лежать в разных поддеревьях. Нужен <b>полный обход</b> — O(n).</p>
+    <p>Высота зависит от порядка вставки: 50, 30, 70, … даёт ровное дерево, а вставка по возрастанию — «список» высоты n.</p>
+  </section>
+</template>
+
+<script src="../assets/viz.js"></script>
+<script>
+const CODE = {
+  insert: {
+    title: { py: 'binary_tree.py — insert_item / _insert', cpp: 'binary_tree.h — insertItem → insert' },
+    py: `
+def insert_item(self, item):
+    if self.retrieve_item(item) is not None:        #@dup
+        return False                                #@dup
+    self._root = self._insert(self._root, item)
+    return True
+
+def _insert(self, tree, item):
+    if tree is None:                    # base case: место найдено   #@new
+        return Node(item)                                            #@new
+    if item < tree.info:                                             #@left
+        tree.left = self._insert(tree.left, item)                    #@left
+    else:                                                            #@right
+        tree.right = self._insert(tree.right, item)                  #@right
+    return tree`,
+    cpp: `
+bool insertItem(const T& item) { return insert(root, item); }
+
+bool insert(Node<T>*& tree, const T& item) {
+    if (tree == nullptr) {                      // base case: место найдено   //@new
+        tree = new Node<T>(item);                                           //@new
+        return true;
+    }
+    if (item < tree->info) return insert(tree->left, item);                 //@left
+    if (tree->info < item) return insert(tree->right, item);                //@right
+    return false;                               // такой ключ уже есть         //@dup
+}`,
+  },
+  search: {
+    title: { py: 'binary_tree.py — retrieve_item', cpp: 'binary_tree.h — retrieveItem → search' },
+    py: `
+def retrieve_item(self, item):
+    """Возвращает данные с ключом item или None."""
+    tree = self._root                       #@start
+    while tree is not None:
+        if item < tree.info:                #@left
+            tree = tree.left                #@left
+        elif tree.info < item:              #@right
+            tree = tree.right               #@right
+        else:
+            return tree.info                #@found
+    return None                             #@none`,
+    cpp: `
+T* retrieveItem(const T& item) const { return search(root, item); }    //@start
+
+T* search(Node<T>* tree, const T& item) const {
+    while (tree != nullptr) {
+        if (item < tree->info) tree = tree->left;               //@left
+        else if (tree->info < item) tree = tree->right;         //@right
+        else return &tree->info;                                //@found
+    }
+    return nullptr;                                             //@none
+}`,
+  },
+  delete: {
+    title: { py: 'binary_tree.py — delete_item / _delete / _delete_node', cpp: 'binary_tree.h — remove / deleteNode' },
+    py: `
+def delete_item(self, item):
+    if self.retrieve_item(item) is None:            #@none
+        return False                                #@none
+    self._root = self._delete(self._root, item)
+    return True
+
+def _delete(self, tree, item):
+    if item < tree.info:                            #@left
+        tree.left = self._delete(tree.left, item)   #@left
+        return tree
+    if tree.info < item:                            #@right
+        tree.right = self._delete(tree.right, item) #@right
+        return tree
+    return self._delete_node(tree)                  #@found
+
+def _delete_node(self, tree):
+    if tree.left is None:       # лист или только правый ребёнок   #@case1
+        return tree.right                                          #@case1
+    if tree.right is None:      # только левый ребёнок             #@case2
+        return tree.left                                           #@case2
+    # Два ребёнка: предшествующий элемент - самый правый в левом поддереве.
+    pred = tree.left                                               #@pred
+    while pred.right is not None:                                  #@walk
+        pred = pred.right                                          #@walk
+    tree.info = pred.info       # перезаписываем данные            #@copy
+    tree.left = self._delete(tree.left, pred.info)                 #@preddel
+    return tree`,
+    cpp: `
+bool remove(Node<T>*& tree, const T& item) {
+    if (tree == nullptr) return false;                          //@none
+    if (item < tree->info) return remove(tree->left, item);     //@left
+    if (tree->info < item) return remove(tree->right, item);    //@right
+    deleteNode(tree);                                           //@found
+    return true;
+}
+
+void deleteNode(Node<T>*& tree) {
+    Node<T>* temp = tree;
+    if (tree->left == nullptr) {         // лист или только правый ребёнок   //@case1
+        tree = tree->right;                                                 //@case1
+        delete temp;
+    } else if (tree->right == nullptr) { // только левый ребёнок             //@case2
+        tree = tree->left;                                                  //@case2
+        delete temp;
+    } else {                             // два ребёнка
+        Node<T>** pred = &tree->left;                                       //@pred
+        while ((*pred)->right != nullptr) pred = &(*pred)->right;           //@walk
+        tree->info = (*pred)->info;      // перезаписываем данные            //@copy
+        deleteNode(*pred);               // удаляем предшествующий узел      //@preddel
+    }
+}`,
+  },
+  inorder: {
+    title: { py: 'binary_tree.py — _inorder (Л, узел, П)', cpp: 'binary_tree.h — inorder (Л, узел, П)' },
+    py: `
+@staticmethod
+def _inorder(tree, visit):
+    if tree is None:                            #@enter
+        return
+    BinaryTree._inorder(tree.left, visit)       #@goleft
+    visit(tree.info)                            #@visit
+    BinaryTree._inorder(tree.right, visit)      #@goright`,
+    cpp: `
+template<class F> static void inorder(const Node<T>* tree, F& visit) {
+    if (tree == nullptr) return;                //@enter
+    inorder(tree->left, visit);                 //@goleft
+    visit(tree->info);                          //@visit
+    inorder(tree->right, visit);                //@goright
+}`,
+  },
+  preorder: {
+    title: { py: 'binary_tree.py — _preorder (узел, Л, П)', cpp: 'binary_tree.h — preorder (узел, Л, П)' },
+    py: `
+@staticmethod
+def _preorder(tree, visit):
+    if tree is None:                            #@enter
+        return
+    visit(tree.info)                            #@visit
+    BinaryTree._preorder(tree.left, visit)      #@goleft
+    BinaryTree._preorder(tree.right, visit)     #@goright`,
+    cpp: `
+template<class F> static void preorder(const Node<T>* tree, F& visit) {
+    if (tree == nullptr) return;                //@enter
+    visit(tree->info);                          //@visit
+    preorder(tree->left, visit);                //@goleft
+    preorder(tree->right, visit);               //@goright
+}`,
+  },
+  postorder: {
+    title: { py: 'binary_tree.py — _postorder (Л, П, узел)', cpp: 'binary_tree.h — postorder (Л, П, узел)' },
+    py: `
+@staticmethod
+def _postorder(tree, visit):
+    if tree is None:                            #@enter
+        return
+    BinaryTree._postorder(tree.left, visit)     #@goleft
+    BinaryTree._postorder(tree.right, visit)    #@goright
+    visit(tree.info)                            #@visit`,
+    cpp: `
+template<class F> static void postorder(const Node<T>* tree, F& visit) {
+    if (tree == nullptr) return;                //@enter
+    postorder(tree->left, visit);               //@goleft
+    postorder(tree->right, visit);              //@goright
+    visit(tree->info);                          //@visit
+}`,
+  },
+  station: {
+    title: { py: 'zadanie1_poezda.py — find_by_destination', cpp: 'zadanie1_poezda.cpp — findByDestination' },
+    py: `
+def find_by_destination(tree):
+    station = read_non_empty("Станция назначения: ")
+    # Станция не является ключом, поэтому нужен полный обход дерева.
+    found = []
+    tree.inorder_tree(lambda t: found.append(t)             #@visit,match
+                      if t.destination == station else None)   #@visit,match
+    if not found:                                           #@none
+        print(f"Поездов до станции «{station}» нет.")       #@none
+        return
+    print(f"Поезда до станции «{station}»:")                #@done
+    print_header()                                          #@done
+    for t in found:                                         #@done
+        print_row(t)                                        #@done`,
+    cpp: `
+void findByDestination(const BinaryTree<Train>& tree) {
+    std::string station = readNonEmpty("Станция назначения: ");
+    // Станция не является ключом, поэтому нужен полный обход дерева.
+    std::vector<Train> found;
+    tree.inorderTree([&](const Train& t) {                  //@visit
+        if (t.destination == station) found.push_back(t);   //@visit,match
+    });
+    if (found.empty()) {                                    //@none
+        std::cout << "Поездов до станции «" << station << "» нет.\\n";   //@none
+        return;
+    }
+    std::cout << "Поезда до станции «" << station << "»:\\n";   //@done
+    printHeader();                                          //@done
+    for (const Train& t : found) printRow(t);               //@done
+}`,
+  },
+};
+
+const DEMO = [
+  [50, 'Москва', '08:15'], [30, 'Бухарест', '21:40'], [70, 'Одесса', '06:05'], [20, 'Яссы', '13:00'],
+  [40, 'Киев', '17:30'], [60, 'Москва', '22:50'], [80, 'Унгены', '10:20'], [35, 'Бухарест', '09:45'], [65, 'Одесса', '15:10'],
+];
+
+let root = null;
+let nextId = 1;
+const node = (key, dest, time) => ({ id: nextId++, key, dest, time, left: null, right: null });
+const clone = n => (n ? { ...n, left: clone(n.left), right: clone(n.right) } : null);
+const count = n => (n ? 1 + count(n.left) + count(n.right) : 0);
+const height = n => (n ? 1 + Math.max(height(n.left), height(n.right)) : 0);
+const fmt = t => `${t.key} · ${t.dest} · ${t.time}`;
+
+// Шаги одной операции. hl: id -> класс узла; path: id узлов на пути; badge: id -> номер в обходе.
+function recorder(code) {
+  const steps = [];
+  let cmp = 0;
+  const rec = (line, msg, o = {}) => steps.push({
+    code, line, msg, kind: o.kind,
+    st: { root: clone(root), hl: { ...(o.hl || {}) }, path: o.path ? o.path.slice() : [], badge: { ...(o.badge || {}) }, tape: o.tape ? o.tape.slice() : null, trains: o.trains || null },
+    vars: o.vars || {},
+    stats: { 'Узлов': count(root), 'Высота': height(root), 'Сравнений': (cmp += o.cmp || 0) },
+  });
+  return { steps, rec };
+}
+
+function insertSteps(key, dest, time, R) {
+  const { rec } = R;
+  const path = [];
+  let parent = null, side = null, t = root;
+  rec(null, `Добавляем поезд ${key} (${dest}, ${time}). Спускаемся от корня, сравнивая номера.`, { vars: { item: key } });
+  while (t) {
+    path.push(t.id);
+    if (key < t.key) {
+      rec('left', `${key} < ${t.key} → идём в левое поддерево`, { hl: { [t.id]: 'cur' }, path, cmp: 1, vars: { item: key, 'tree.info': t.key } });
+      parent = t; side = 'left'; t = t.left;
+    } else if (key > t.key) {
+      rec('right', `${key} > ${t.key} → идём в правое поддерево`, { hl: { [t.id]: 'cur' }, path, cmp: 1, vars: { item: key, 'tree.info': t.key } });
+      parent = t; side = 'right'; t = t.right;
+    } else {
+      rec('dup', `Поезд с номером ${key} уже есть — ключ должен быть уникален, добавление отменено.`, { kind: 'bad', hl: { [t.id]: 'bad' }, path, cmp: 1, vars: { item: key } });
+      return false;
+    }
+  }
+  const nd = node(key, dest, time);
+  if (!parent) root = nd; else parent[side] = nd;
+  rec('new', parent ? `Пустое место найдено: новый лист ${key} — ${side === 'left' ? 'левый' : 'правый'} ребёнок узла ${parent.key}.` : `Дерево было пустым: ${key} становится корнем.`,
+    { kind: 'ok', hl: { [nd.id]: 'ok' }, path: [...path, nd.id], vars: { item: key } });
+  return true;
+}
+
+function searchSteps(key, R) {
+  const { rec } = R;
+  const path = [];
+  let t = root;
+  rec('start', `Ищем поезд № ${key}: начинаем с корня${root ? ` (${root.key})` : ' — дерево пусто'}.`, { vars: { item: key } });
+  while (t) {
+    path.push(t.id);
+    if (key < t.key) { rec('left', `${key} < ${t.key} → налево`, { hl: { [t.id]: 'cur' }, path, cmp: 1, vars: { item: key, 'tree.info': t.key } }); t = t.left; }
+    else if (key > t.key) { rec('right', `${key} > ${t.key} → направо`, { hl: { [t.id]: 'cur' }, path, cmp: 1, vars: { item: key, 'tree.info': t.key } }); t = t.right; }
+    else {
+      rec('found', `Найден: поезд ${t.key}, станция «${t.dest}», отправление ${t.time}. Сравнений: ${path.length} из ${count(root)} узлов.`, { kind: 'ok', hl: { [t.id]: 'ok' }, path, cmp: 1, trains: [{ ...t, ok: true }], vars: { item: key } });
+      return;
+    }
+  }
+  rec('none', `Поезд № ${key} не найден: дошли до пустой ссылки (None).`, { kind: 'bad', path, vars: { item: key } });
+}
+
+function deleteSteps(key, R) {
+  const { rec } = R;
+  const path = [];
+  let parent = null, side = null, t = root;
+  rec(null, `Удаляем поезд № ${key}. Сначала находим узел.`, { vars: { item: key } });
+  while (t && t.key !== key) {
+    path.push(t.id);
+    const go = key < t.key ? 'left' : 'right';
+    rec(go, `${key} ${go === 'left' ? '<' : '>'} ${t.key} → ${go === 'left' ? 'налево' : 'направо'}`, { hl: { [t.id]: 'cur' }, path, cmp: 1, vars: { item: key, 'tree.info': t.key } });
+    parent = t; side = go; t = t[go];
+  }
+  if (!t) { rec('none', `Поезд № ${key} не найден — удалять нечего.`, { kind: 'bad', path, vars: { item: key } }); return; }
+  path.push(t.id);
+  rec('found', `Узел ${key} найден. Детей: ${(t.left ? 1 : 0) + (t.right ? 1 : 0)}.`, { kind: 'hit', hl: { [t.id]: 'bad' }, path, cmp: 1, vars: { item: key } });
+
+  const replace = (par, sd, target, child) => { if (!par) root = child; else par[sd] = child; };
+  if (!t.left || !t.right) {
+    const child = t.left || t.right;
+    const line = !t.left ? 'case1' : 'case2';
+    const what = !t.left && !t.right ? 'лист — просто убираем его' : `один ребёнок (${child.key}) — он встаёт на место удаляемого узла`;
+    replace(parent, side, t, child);
+    rec(line, `Случай ${!t.left && !t.right ? 1 : 2}: ${what}.`, { kind: 'ok', hl: child ? { [child.id]: 'ok' } : {}, vars: { item: key } });
+    return;
+  }
+  // два ребёнка
+  let predParent = t, pred = t.left;
+  const ppath = [pred.id];
+  rec('pred', `Случай 3: два ребёнка. Ищем предшественника: pred = левый ребёнок (${pred.key}).`, { hl: { [t.id]: 'bad', [pred.id]: 'pred' }, path: ppath, vars: { item: key, pred: pred.key } });
+  while (pred.right) {
+    predParent = pred; pred = pred.right; ppath.push(pred.id);
+    rec('walk', `У pred есть правый ребёнок → pred = ${pred.key}`, { hl: { [t.id]: 'bad', [pred.id]: 'pred' }, path: ppath, vars: { item: key, pred: pred.key } });
+  }
+  rec('walk', `У ${pred.key} нет правого ребёнка: это максимум левого поддерева — предшественник ${key}.`, { kind: 'hit', hl: { [t.id]: 'bad', [pred.id]: 'pred' }, path: ppath, vars: { item: key, pred: pred.key } });
+  const old = t.key;
+  t.key = pred.key; t.dest = pred.dest; t.time = pred.time;
+  rec('copy', `Переписываем данные: в узел ${old} записываем поезд ${pred.key} (${pred.dest}). Инвариант сохраняется.`, { hl: { [t.id]: 'ok', [pred.id]: 'pred' }, path: ppath, vars: { item: key, 'tree.info': t.key } });
+  const child = pred.left;
+  if (predParent === t) predParent.left = child; else predParent.right = child;
+  rec('preddel', `Удаляем старый узел-предшественник: у него ${child ? `только левый ребёнок (${child.key}) — случай 2` : 'нет детей — случай 1'}.`, { kind: 'ok', hl: { [t.id]: 'ok', ...(child ? { [child.id]: 'path' } : {}) }, vars: { item: key } });
+}
+
+function traverseSteps(order, R) {
+  const { rec } = R;
+  const out = [], badge = {}, done = {};
+  const name = { inorder: 'Симметричный обход (Л, узел, П)', preorder: 'Прямой обход (узел, Л, П)', postorder: 'Обратный обход (Л, П, узел)' }[order];
+  rec(null, `${name}: начинаем с корня.`, { tape: [] });
+  const stack = [];
+  function visit(t) {
+    out.push(t.key); badge[t.id] = out.length; done[t.id] = 'done';
+    rec('visit', `visit(${t.key}) → вывод: ${out.join(' ')}`, { kind: 'hit', hl: { ...done, [t.id]: 'cur' }, path: stack, badge, tape: out, vars: { tree: t.key } });
+  }
+  function walk(t) {
+    if (!t) return;
+    stack.push(t.id);
+    rec('enter', `Вызов для узла ${t.key}`, { hl: { ...done, [t.id]: 'cur' }, path: stack, badge, tape: out, vars: { tree: t.key } });
+    if (order === 'preorder') visit(t);
+    if (t.left) rec('goleft', `${t.key}: идём в левое поддерево (${t.left.key})`, { hl: { ...done, [t.id]: 'path' }, path: stack, badge, tape: out, vars: { tree: t.key } });
+    walk(t.left);
+    if (order === 'inorder') visit(t);
+    if (t.right) rec('goright', `${t.key}: идём в правое поддерево (${t.right.key})`, { hl: { ...done, [t.id]: 'path' }, path: stack, badge, tape: out, vars: { tree: t.key } });
+    walk(t.right);
+    if (order === 'postorder') visit(t);
+    stack.pop();
+  }
+  walk(root);
+  rec(null, root ? `${name} завершён: ${out.join(' ')}` + (order === 'inorder' ? ' — ключи по возрастанию.' : '') : 'Дерево пусто.', { kind: 'ok', hl: done, badge, tape: out });
+}
+
+function stationSteps(station, R) {
+  const { rec } = R;
+  const found = [], done = {};
+  rec(null, `Ищем поезда до станции «${station}». Станция не ключ → полный симметричный обход.`, { trains: [] });
+  (function walk(t) {
+    if (!t) return;
+    walk(t.left);
+    const match = t.dest.toLowerCase() === station.toLowerCase();
+    if (match) { found.push({ ...t, ok: true }); done[t.id] = 'ok'; } else done[t.id] = 'dim';
+    rec(match ? 'match' : 'visit', `${t.key}: «${t.dest}» ${match ? '= искомая станция → добавляем в found' : '≠ «' + station + '»'}`,
+      { kind: match ? 'ok' : undefined, hl: { ...done, [t.id]: match ? 'ok' : 'cur' }, trains: found, cmp: 1, vars: { 't.destination': t.dest, station } });
+    walk(t.right);
+  })(root);
+  if (found.length) rec('done', `Поездов до «${station}»: ${found.length} — ${found.map(t => t.key).join(', ')} (просмотрено узлов: ${count(root)}).`, { kind: 'ok', hl: done, trains: found });
+  else rec('none', `Поездов до станции «${station}» нет (просмотрено узлов: ${count(root)}).`, { kind: 'bad', hl: done, trains: [] });
+}
+
+function readKey() {
+  const k = Number(document.getElementById('key').value);
+  if (!Number.isInteger(k) || k < 1 || k > 9999) throw new Error('Номер поезда - целое число от 1 до 9999.');
+  return k;
+}
+
+let VIZ = null;
+function run(code, fn) {
+  const R = recorder(code);
+  try { fn(R); } catch (e) { R.rec(null, e.message, { kind: 'bad' }); }
+  VIZ.load(R.steps, { autoplay: true });
+}
+
+function buildDemo(animated) {
+  root = null; nextId = 1;
+  if (!animated) {
+    for (const [k, d, t] of DEMO) {
+      let p = null, s = null, x = root;
+      while (x) { p = x; s = k < x.key ? 'left' : 'right'; x = x[s]; }
+      const nd = node(k, d, t);
+      if (!p) root = nd; else p[s] = nd;
+    }
+    const R = recorder('insert');
+    R.rec(null, 'Демо-дерево: 9 поездов, вставленных в порядке 50, 30, 70, 20, 40, 60, 80, 35, 65. Выберите операцию на панели.');
+    return R.steps;
+  }
+  const R = recorder('insert');
+  for (const [k, d, t] of DEMO) insertSteps(k, d, t, R);
+  R.rec(null, `Готово: ${count(root)} узлов, высота ${height(root)} — минимально возможная для 9 узлов (⌈log₂ 10⌉ = 4).`, { kind: 'ok' });
+  return R.steps;
+}
+
+function render(step, view) {
+  const st = step.st;
+  if (!st) { view.innerHTML = ''; return; }
+  const onPath = new Set(st.path);
+  const svg = st.root ? Viz.drawBinary([st.root], {
+    colW: 64, rowH: 76, r: 21, extraBottom: 18,
+    label: n => n.key,
+    sub: n => n.dest,
+    title: n => fmt(n),
+    cls: n => st.hl[n.id] || (onPath.has(n.id) ? 'path' : ''),
+    badge: n => st.badge[n.id] || '',
+    edgeCls: (p, c) => (onPath.has(c.id) && onPath.has(p.id) ? 'on' : ''),
+  }) : '<div class="empty-tree">(дерево пусто)</div>';
+  let extra = '';
+  if (st.tape) {
+    extra = `<div class="label section-label" style="margin:16px 0 22px">Вывод обхода</div><div class="tape">${st.tape.map((k, i) => `<div class="cell ${i === st.tape.length - 1 && step.line === 'visit' ? 'cur' : 'on'}"><span class="idx">${i + 1}</span>${k}</div>`).join('') || '<span class="hint">пока пусто</span>'}</div>`;
+  } else if (st.trains) {
+    extra = `<div class="label section-label" style="margin:16px 0 8px">Найденные поезда</div><div class="info-row">${st.trains.map(t => `<span class="train ok"><b>${t.key}</b> · ${Viz.esc(t.dest)} · ${t.time}</span>`).join('') || '<span class="hint">пока ничего</span>'}</div>`;
+  }
+  view.innerHTML = svg + extra;
+}
+
+VIZ = Viz.page({
+  lang: 'ru', logo: '⇅', badge: 'ЛР №5 · Задание 1',
+  title: 'Справочная вокзала на бинарном поисковом дереве',
+  subtitle: 'Ключ — номер поезда. Добавление, поиск, удаление (через предшественника) и три обхода — пошагово',
+  stageTitle: 'Бинарное поисковое дерево',
+  legend: [['var(--yellow)', 'Текущий узел'], ['var(--accent-2)', 'Путь поиска'], ['var(--green)', 'Найден / вставлен'], ['var(--red)', 'Удаляемый'], ['var(--purple)', 'Предшественник'], ['var(--cyan)', 'Уже посещён']],
+  code: CODE, speed: 650,
+  generate: () => buildDemo(false),
+  render,
+  onEnter: () => document.getElementById('opSearch').click(),
+  init(viz) {
+    VIZ = viz;
+    const $ = id => document.getElementById(id);
+    $('opInsert').onclick = () => run('insert', R => {
+      const k = readKey(), d = $('station').value.trim(), t = $('time').value.trim();
+      if (!d) throw new Error('Станция назначения не должна быть пустой.');
+      const m = t.match(/^(\d{1,2}):(\d{2})$/);
+      if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) throw new Error('Введите время в формате ЧЧ:ММ (00:00 - 23:59).');
+      insertSteps(k, d, `${m[1].padStart(2, '0')}:${m[2]}`, R);
+    });
+    $('opSearch').onclick = () => run('search', R => searchSteps(readKey(), R));
+    $('opDelete').onclick = () => run('delete', R => deleteSteps(readKey(), R));
+    $('opTraverse').onclick = () => { const o = $('order').value; run(o, R => traverseSteps(o, R)); };
+    $('opStation').onclick = () => run('station', R => {
+      const s = $('station').value.trim();
+      if (!s) throw new Error('Введите станцию назначения.');
+      stationSteps(s, R);
+    });
+    $('opDemo').onclick = () => VIZ.load(buildDemo(true), { autoplay: true });
+    $('opClear').onclick = () => { root = null; const R = recorder('insert'); R.rec(null, 'Дерево очищено (destroy: обход postorder, каждый узел удаляется после своих детей).', { kind: 'ok' }); VIZ.load(R.steps); };
+  },
+});
+</script>
+</body>
+</html>

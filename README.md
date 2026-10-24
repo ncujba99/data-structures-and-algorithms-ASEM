@@ -1,0 +1,126 @@
+# Structuri de date și algoritmi — ASEM
+
+Solutions to two assignments from the *Data Structures and Algorithms* course. Each task has three parts:
+
+- **documentation** that starts with the math (definitions, formulas, proofs) and then explains the algorithm;
+- **two implementations**, Python and C++, that use the same algorithm and print identical output;
+- **an interactive visualizer**: an HTML page that animates the algorithm step by step and highlights the line of code being executed.
+
+```
+              ╔════════════════════════════════╗
+              ║ structuri de date si algorime/ ║
+              ╚════════════════╤═══════════════╝
+        ┌──────────────────────┼────────────────────────┐
+        ▼                      ▼                        ▼
+┌───────────────┐   ┌─────────────────────┐   ╭──────────────────╮
+│    set_N1/    │   │        lab5/        │   │   visualizer/    │
+│ combinatorics │   │ binary tree (Lab 5) │   │ 7 animated pages │
+│   Romanian    │   │       Russian       │   │ open index.html  │
+└───────────────┘   └─────────────────────┘   ╰──────────────────╯
+```
+
+Every task follows the same path:
+
+```
+┌──────────────────┐   ┌────────────────────┐   ╔══════════════════╗
+│  docs/<task>.md  │──►│  python/<task>.py  │──►║ identical output ║
+│ math → algorithm │   │   cpp/<task>.cpp   │   ║ (checked: diff)  ║
+└──────────────────┘   └──────────┬─────────┘   ╚══════════════════╝
+                                  │
+                                  ▼
+                      ╭────────────────────────╮
+                      │ visualizer/<task>.html │
+                      │ step-by-step animation │
+                      ╰────────────────────────╯
+```
+
+---
+
+## Tasks
+
+### Set de probleme N1: combinatorics and backtracking (Romanian)
+
+Index and backtracking overview: [set_N1/README.md](set_N1/README.md)
+
+| Task | What it does | Docs | Code | Visualizer |
+|---|---|---|---|---|
+| Problema 1 | counts permutations, combinations, arrangements: $n!$, $C(n,m)$, $A(n,m)$ | [problema1.md](set_N1/docs/problema1.md) | [py](set_N1/python/problema1.py) · [cpp](set_N1/cpp/problema1.cpp) | [problema1.html](visualizer/set_N1/problema1.html) |
+| Problema 2 | generates all permutations of $A = \{a_1..a_4\}$, combinations and arrangements of 3 | [problema2.md](set_N1/docs/problema2.md) | [py](set_N1/python/problema2.py) · [cpp](set_N1/cpp/problema2.cpp) | [problema2.html](visualizer/set_N1/problema2.html) |
+| Problema 3a | all permutations of $n$ elements | [problema3a_permutari.md](set_N1/docs/problema3a_permutari.md) | [py](set_N1/python/problema3_permutari.py) · [cpp](set_N1/cpp/problema3_permutari.cpp) | [problema3a_permutari.html](visualizer/set_N1/problema3a_permutari.html) |
+| Problema 3b | all placements of $n$ non-attacking rooks on an $n \times n$ board ($n!$ solutions) | [problema3b_ture.md](set_N1/docs/problema3b_ture.md) | [py](set_N1/python/problema3_ture.py) · [cpp](set_N1/cpp/problema3_ture.cpp) | [problema3b_ture.html](visualizer/set_N1/problema3b_ture.html) |
+
+### Лабораторная работа №5: binary tree (Russian)
+
+Theory, class interface and answers to the control questions: [lab5/README.md](lab5/README.md)
+
+| Task | What it does | Docs | Code | Visualizer |
+|---|---|---|---|---|
+| Задание 1 | train-station information desk on a **binary search tree** (key = train number) | [zadanie1_poezda.md](lab5/docs/zadanie1_poezda.md) | [py](lab5/python/zadanie1_poezda.py) · [cpp](lab5/cpp/zadanie1_poezda.cpp) | [zadanie1_poezda.html](visualizer/lab5/zadanie1_poezda.html) |
+| Задание 2 | **decision tree** for a consumer-loan decision, as a yes/no dialog | [zadanie2_derevo_reshenii.md](lab5/docs/zadanie2_derevo_reshenii.md) | [py](lab5/python/zadanie2_derevo_reshenii.py) · [cpp](lab5/cpp/zadanie2_derevo_reshenii.cpp) | [zadanie2_derevo_reshenii.html](visualizer/lab5/zadanie2_derevo_reshenii.html) |
+| Задание 3 | **expression tree** calculator for postfix (and infix) expressions | [zadanie3_kalkulyator.md](lab5/docs/zadanie3_kalkulyator.md) | [py](lab5/python/zadanie3_kalkulyator.py) · [cpp](lab5/cpp/zadanie3_kalkulyator.cpp) | [zadanie3_kalkulyator.html](visualizer/lab5/zadanie3_kalkulyator.html) |
+
+Shared code for Lab 5: [`binary_tree.h`](lab5/cpp/binary_tree.h) / [`binary_tree.py`](lab5/python/binary_tree.py) (`Node`, `BinaryTree` and the generic tree functions) and [`console.h`](lab5/cpp/console.h) / [`console.py`](lab5/python/console.py) (input with error checking).
+
+---
+
+## Running
+
+### Python (3.8+)
+
+```sh
+cd set_N1/python && python3 problema1.py
+cd lab5/python   && python3 zadanie1_poezda.py
+```
+
+### C++ (C++17)
+
+```sh
+cd set_N1/cpp && g++ -std=c++17 -O2 -Wall -o problema1 problema1.cpp && ./problema1
+cd lab5/cpp   && g++ -std=c++17 -O2 -Wall -o zadanie1 zadanie1_poezda.cpp && ./zadanie1
+```
+
+On Windows with Visual Studio, add `/utf-8` (the sources are UTF-8): `cl /std:c++17 /EHsc /utf-8 zadanie1_poezda.cpp`. The full command list for each task is in [set_N1/README.md](set_N1/README.md#compilare-și-rulare) and [lab5/README.md](lab5/README.md#3-компиляция-и-запуск).
+
+### Visualizers
+
+Open [`visualizer/index.html`](visualizer/index.html) in any browser. It works offline, straight from the file, with nothing to install.
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ ← back   Title of the task                    [ Visualization ] [ Theory ] │
+├────────────────────────────────────────────────────────────────────────────┤
+│ task inputs …                speed ──o──    Reset   |<   ► Play   >|       │
+├────────────────────────────────────────────┬───────────────────────────────┤
+│ animation (tree / board / arrays)          │ live code tracer              │
+│                                            │   Python | C++                │
+│                                            │ ▌ current line highlighted    │
+│ message for the current step               │ current variables             │
+│ step slider ─────────o──────────           │                               │
+├────────────────────────────────────────────┤                               │
+│ execution log                              │                               │
+└────────────────────────────────────────────┴───────────────────────────────┘
+```
+
+Keys: `Space` play / pause, `←` / `→` one step. The page-level code lives in each HTML file; the shared player, style and tree drawing are in [`visualizer/assets/`](visualizer/assets/).
+
+---
+
+## Source and notes
+
+- **Lab 5** follows Ovsyannikov, *Алгоритмы и структуры данных. Часть I* (`RU_1_Ovseannikov_АЛГОРИТМЫ И СТРУКТУРЫ ДАННЫХ Часть I.pdf`), Lab 5, pp. 89–111. The practical tasks are on pp. 109–111.
+- **Lab 5, Task 1** says to implement "your variant of Task 1 from Lab 3", but the variants with a key field (1–10) belong to Task 1 of **Lab 4** (pp. 85–89). Variant 10 (train station) is implemented; see the note in [lab5/README.md](lab5/README.md).
+- **Problema 3b:** the Russian statement says "two rooks", but the expected answer format $c_1..c_n$ and the Romanian statement ask for $n$ rooks. Both cases are covered in [problema3b_ture.md](set_N1/docs/problema3b_ture.md#16-generalizare-k-ture-k-le-n-și-cazul-a-două-ture).
+- **Checks:**
+  - All C++ programs compile without warnings (`-Wall -Wextra -pedantic`).
+  - The Lab 5 programs also run cleanly under AddressSanitizer / UBSan.
+  - Python and C++ produce identical output for the same input, including invalid input (checked with `diff`).
+
+## Conventions in the docs
+
+- Formulas are LaTeX (`$...$`) and render on GitHub/GitLab and in the VS Code preview.
+- Diagrams are drawn with box-drawing characters, so they look the same in any editor, with no extensions:
+  - single frame `┌─┐`: a node or step;
+  - double frame `╔═╗`: a result (solution, decision, final value);
+  - rounded frame `╭─╮`: a start point or a number;
+  - dashed frame `┌┄┐`: a branch that is cut off or not drawn in full;
+  - labels on the connectors: `Л` / `П` (left / right child), `ДА` / `НЕТ`, `da` / `nu`.
