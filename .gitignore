@@ -28,3 +28,10 @@ a.out
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Node
+node_modules/
+dist/
+
+# Local database files (lab5_web, bind-mounted into the db container)
+pgdata/

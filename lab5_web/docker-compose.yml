@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: station
+      POSTGRES_USER: station
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-station}
+    ports:
+      - "5432:5432"   # host access for debugging
+    volumes:
+      # The database files live next to this file, in ./pgdata (git-ignored). Delete the folder to start fresh.
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U station -d station"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://station:${POSTGRES_PASSWORD:-station}@db:5432/station
+    ports:
+      - "8000:8000"   # API docs at http://localhost:8000/docs
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend

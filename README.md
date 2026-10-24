@@ -61,6 +61,10 @@ Theory, class interface and answers to the control questions: [lab5/README.md](l
 
 Shared code for Lab 5: [`binary_tree.h`](lab5/cpp/binary_tree.h) / [`binary_tree.py`](lab5/python/binary_tree.py) (`Node`, `BinaryTree` and the generic tree functions) and [`console.h`](lab5/cpp/console.h) / [`console.py`](lab5/python/console.py) (input with error checking).
 
+### Bonus: Задание 1 as a real web app
+
+[lab5_web/](lab5_web/README.md) solves the same train-station task the way it is done at work: React frontend, FastAPI backend and PostgreSQL in Docker Compose, with Alembic migrations. The data is relational (countries → cities → trains → stops), which shows what a database adds over the hand-written tree: integrity rules, transactions, joins and reports. It also shows where the tree went: PostgreSQL keeps every key and index as a B+-tree, and the app lists them with their query plans. Run it with `cd lab5_web && docker compose up --build`.
+
 ---
 
 ## Running
