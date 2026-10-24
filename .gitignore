@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# C++ build output
+*.o
+*.obj
+*.out
+*.exe
+*.dSYM/
+build/
+a.out
+
+# Claude Code local settings
+.claude/settings.local.json
